@@ -1,0 +1,17 @@
+{
+  "name": "guess-the-song",
+  "version": "1.0.0",
+  "description": "Juego local para adivinar canciones",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^8.2.2"
+  },
+  "dependencies": {
+    "express": "^5.2.1"
+  }
+}

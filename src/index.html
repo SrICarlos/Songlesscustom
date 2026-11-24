@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Songless</title>
+
+    <link rel="stylesheet" href="./style.css">
+
+    <!-- Spotify Web Playback SDK -->
+    <script src="https://sdk.scdn.co/spotify-player.js"></script>
+</head>
+
+<body>
+
+    <div class="app">
+
+        <!-- HEADER -->
+        <header class="header">
+
+            <button class="brand" id="homeButton">
+                SONGLESS
+            </button>
+
+            <div class="spotify-area">
+
+                <button
+                    id="spotifyLoginButton"
+                    class="spotify-login-button"
+                >
+                    Conectar Spotify
+                </button>
+
+                <div
+                    id="spotifyUser"
+                    class="spotify-user hidden"
+                >
+                    <span
+                        id="spotifyDot"
+                        class="spotify-dot"
+                    ></span>
+
+                    <span id="spotifyStatus">
+                        Spotify
+                    </span>
+                    <button
+                        id="adminButton"
+                        class="header-icon-button"
+                        title="Administración"
+                    >
+                        ⚙
+                    </button>
+                    <button
+                        id="logoutButton"
+                        class="logout-button"
+                        title="Desconectar Spotify"
+                    >
+                        ×
+                    </button>
+                </div>
+
+            </div>
+
+        </header>
+
+
+        
+        <!-- Modos de Juego -->
+      
+
+        <main id="homeScreen" class="screen">
+
+            <section class="hero">
+
+                <p class="eyebrow">
+                    THE MUSIC GUESSING GAME
+                </p>
+
+                <h1>
+                    ¿CUÁNTO TARDAS<br>
+                    EN RECONOCERLA?
+                </h1>
+
+                <p class="hero-description">
+                    Escucha el menor fragmento posible
+                    y demuestra que conoces la canción.
+                </p>
+
+            </section>
+
+
+            <section class="mode-selection">
+
+                <button
+                    id="dailyButton"
+                    class="mode-card"
+                >
+                    <span class="mode-number">
+                        01
+                    </span>
+
+                    <div class="mode-content">
+                        <span class="mode-title">
+                            DIARIO
+                        </span>
+
+                        <span class="mode-description">
+                            Una canción. Una oportunidad al día.
+                        </span>
+                    </div>
+
+                    <span class="mode-arrow">
+                        →
+                    </span>
+                </button>
+
+
+                <button
+                    id="infiniteButton"
+                    class="mode-card"
+                >
+                    <span class="mode-number">
+                        02
+                    </span>
+
+                    <div class="mode-content">
+                        <span class="mode-title">
+                            INFINITO
+                        </span>
+
+                        <span class="mode-description">
+                            Sigue jugando hasta que no puedas más.
+                        </span>
+                    </div>
+
+                    <span class="mode-arrow">
+                        →
+                    </span>
+                </button>
+
+            </section>
+
+        </main>
+
+
+     
+     <!-- Juego -->
+     
+
+        <main
+            id="gameScreen"
+            class="screen hidden"
+        >
+
+            <section class="game-header">
+
+                <button
+                    id="backButton"
+                    class="back-button"
+                >
+                    ← Volver
+                </button>
+
+                <div class="game-mode">
+                    <span id="gameMode">
+                        DIARIO
+                    </span>
+
+                    <span class="separator">
+                        /
+                    </span>
+
+                    <span id="difficulty">
+                        FÁCIL
+                    </span>
+                </div>
+
+                <div class="round-number">
+                    RONDA
+                    <span id="roundNumber">
+                        01
+                    </span>
+                </div>
+
+            </section>
+
+
+          <section class="game-content">
+
+    <!-- DIFICULTAD -->
+    <div class="difficulty-switcher">
+
+        <button
+            class="difficulty-option selected"
+            data-difficulty="easy"
+        >
+            <span class="difficulty-dot easy-dot"></span>
+            FÁCIL
+        </button>
+
+        <button
+            class="difficulty-option"
+            data-difficulty="medium"
+        >
+            <span class="difficulty-dot medium-dot"></span>
+            INTERMEDIO
+        </button>
+
+        <button
+            class="difficulty-option"
+            data-difficulty="hard"
+        >
+            <span class="difficulty-dot hard-dot"></span>
+            DIFÍCIL
+        </button>
+
+        <button
+            class="difficulty-option"
+            data-difficulty="impossible"
+        >
+            <span class="difficulty-dot impossible-dot"></span>
+            IMPOSIBLE
+        </button>
+
+    </div>
+
+
+    <div class="song-area">
+
+        <p class="listen-label">
+            ESCUCHA EL FRAGMENTO
+        </p>
+
+                    <!-- Player -->
+                    <button
+                        id="playButton"
+                        class="play-button"
+                        aria-label="Reproducir"
+                    >
+                        <span id="playIcon">▶</span>
+                    </button>
+
+
+                    <p
+                        id="fragmentTime"
+                        class="fragment-time"
+                    >
+                        1 segundo
+                    </p>
+
+                </div>
+
+
+                <!-- GUESS -->
+                <section class="guess-area">
+
+                    <label
+                        for="guessInput"
+                        class="guess-label"
+                    >
+                        ¿QUÉ CANCIÓN ES?
+                    </label>
+
+                   <div class="guess-search">
+
+                    <div class="guess-row">
+
+                        <input
+                            id="guessInput"
+                            type="text"
+                            placeholder="Busca una canción..."
+                            autocomplete="off"
+                        >
+
+                        <button
+                            id="guessButton"
+                            class="guess-button"
+                            aria-label="Comprobar respuesta"
+                        >
+                            →
+                        </button>
+
+                    </div>
+
+                    <div
+                        id="searchResults"
+                        class="search-results hidden"
+                    ></div>
+
+                </div>
+
+                    <button
+                        id="skipButton"
+                        class="skip-button"
+                    >
+                        No lo sé, pasar
+                    </button>
+
+                </section>
+
+
+                <!-- ATTEMPTS -->
+                <section class="attempts">
+
+                    <div class="attempts-header">
+
+                        <span>
+                            INTENTOS
+                        </span>
+
+                        <span id="attemptText">
+                            1 / 5
+                        </span>
+
+                    </div>
+
+                    <div class="attempt-dots">
+
+                        <span
+                            class="attempt-dot active"
+                        ></span>
+
+                        <span
+                            class="attempt-dot"
+                        ></span>
+
+                        <span
+                            class="attempt-dot"
+                        ></span>
+
+                        <span
+                            class="attempt-dot"
+                        ></span>
+
+                        <span
+                            class="attempt-dot"
+                        ></span>
+
+                    </div>
+
+                </section>
+
+
+                <!-- RESULTADO -->
+                <p
+                    id="result"
+                    class="result"
+                ></p>
+
+            </section>
+
+        </main>
+
+
+        <!-- ============================= -->
+        <!-- LOADING -->
+        <!-- ============================= -->
+
+        <div
+            id="loading"
+            class="loading hidden"
+        >
+            <div class="loading-spinner"></div>
+            <p>Conectando con Spotify...</p>
+        </div>
+
+    </div>
+
+    <div
+        id="adminModal"
+        class="admin-modal hidden"
+    >
+
+        <div class="admin-panel">
+
+            <div class="admin-header">
+
+                <div>
+                    <p class="eyebrow">
+                        SONGLESS
+                    </p>
+
+                    <h2>
+                        ADMIN
+                    </h2>
+                </div>
+
+                <button
+                    id="closeAdminButton"
+                    class="admin-close"
+                >
+                    ×
+                </button>
+            <p
+                id="adminMessage"
+                class="admin-message"
+            ></p>
+            </div>
+
+
+            <div class="admin-search">
+
+                <label>
+                    BUSCAR ARTISTA
+                </label>
+
+                <div class="admin-search-row">
+
+                    <input
+                        id="artistSearchInput"
+                        type="text"
+                        placeholder="Ej. The Weeknd..."
+                        autocomplete="off"
+                    >
+
+                    <button
+                        id="artistSearchButton"
+                        class="guess-button"
+                    >
+                        →
+                    </button>
+
+                </div>
+
+            </div>
+
+
+            <div
+                id="artistResults"
+                class="artist-results"
+            ></div>
+
+
+            <div
+                id="albumBrowser"
+                class="album-browser hidden"
+            >
+
+                <div class="album-browser-header">
+
+                    <div>
+
+                        <p
+                            id="selectedArtistName"
+                            class="admin-artist-name"
+                        >
+                            Artista
+                        </p>
+
+                        <p
+                            id="albumCount"
+                            class="admin-track-count"
+                        >
+                            0 álbumes
+                        </p>
+
+                    </div>
+
+                    <button
+                        id="closeArtistButton"
+                        class="admin-secondary-button"
+                    >
+                        ← Artistas
+                    </button>
+
+                </div>
+
+
+                <div
+                    id="albumList"
+                    class="album-list"
+                ></div>
+
+
+                <div
+                    id="selectedSongsBar"
+                    class="selected-songs-bar hidden"
+                >
+
+                    <span id="selectedSongsText">
+                        0 canciones seleccionadas
+                    </span>
+
+                    <button
+                        id="addTracksButton"
+                        class="admin-add-button"
+                    >
+                        AÑADIR
+                    </button>
+
+            </div>
+
+        </div>
+
+    </div>
+</div>  
+<!-- ============================= -->
+<!-- RESULT MODAL -->
+<!-- ============================= -->
+
+    <div
+        id="resultModal"
+        class="result-modal hidden"
+    >
+
+        <div class="result-modal-card">
+
+            <button
+                id="closeResultButton"
+                class="result-modal-close"
+                aria-label="Cerrar"
+            >
+                ×
+            </button>
+
+            <p
+                id="resultModalEyebrow"
+                class="eyebrow"
+            >
+                RESULTADO
+            </p>
+
+            <h2 id="resultModalTitle">
+                ¡CORRECTO!
+            </h2>
+
+            <div class="result-song">
+
+                <img
+                    id="resultSongImage"
+                    class="result-song-image"
+                    src=""
+                    alt=""
+                >
+
+                <div class="result-song-info">
+
+                    <span
+                        id="resultSongTitle"
+                        class="result-song-title"
+                    >
+                        Canción
+                    </span>
+
+                    <span
+                        id="resultSongArtist"
+                        class="result-song-artist"
+                    >
+                        Artista
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <button
+                id="nextRoundButton"
+                class="next-round-button"
+            >
+                SIGUIENTE
+            </button>
+
+
+            <div class="result-difficulties">
+
+                <p>
+                    O ELIGE OTRA DIFICULTAD
+                </p>
+
+                <div class="result-difficulty-buttons">
+
+                    <button
+                        class="result-difficulty"
+                        data-difficulty="easy"
+                    >
+                        <span class="difficulty-dot easy-dot"></span>
+                        Fácil
+                    </button>
+
+                    <button
+                        class="result-difficulty"
+                        data-difficulty="medium"
+                    >
+                        <span class="difficulty-dot medium-dot"></span>
+                        Intermedio
+                    </button>
+
+                    <button
+                        class="result-difficulty"
+                        data-difficulty="hard"
+                    >
+                        <span class="difficulty-dot hard-dot"></span>
+                        Difícil
+                    </button>
+
+                    <button
+                        class="result-difficulty"
+                        data-difficulty="impossible"
+                    >
+                        <span class="difficulty-dot impossible-dot"></span>
+                        Imposible
+                    </button>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+    <script>
+    window.onSpotifyWebPlaybackSDKReady = () => {
+        window.spotifySDKReady = true;
+
+        window.dispatchEvent(
+            new Event("spotify-sdk-ready")
+        );
+    };
+</script>
+
+<script src="https://sdk.scdn.co/spotify-player.js"></script>
+<script type="module" src="./app.js"></script>
+
+</body>
+</html>
