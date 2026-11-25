@@ -1,11 +1,12 @@
+
+
 // =====================================================
 // CONFIGURACIÓN
 // =====================================================
 
 const CLIENT_ID = "93ab9700faa841aa8d2c1f1db1c5c3a7";
 
-const REDIRECT_URI =
-    window.location.origin + "/callback";
+const REDIRECT_URI = window.location.origin + "/callback";
 
 const SCOPES = [
     "streaming",
@@ -15,326 +16,122 @@ const SCOPES = [
     "user-modify-playback-state"
 ].join(" ");
 
-
-
-
-
 // Segundos desbloqueados por intento.
-const ATTEMPT_DURATIONS = [
-    1,
-    2,
-    3,
-    5,
-    10
-];
+const ATTEMPT_DURATIONS = [1, 2, 3, 5, 10];
+
+const DIFFICULTY_ORDER = ["easy", "medium", "hard", "impossible"];
+
+
+
+const gameModes = {};
 
 
 // =====================================================
-// ESTADO DE LA APLICACIÓN
+// ESTADO
 // =====================================================
 
 let spotifyPlayer = null;
-let songs = [];
-
-let selectedAdminArtist = null;
-
-let adminTracks = [];
-let adminAlbums = [];
-
-let adminSelectedSongs =
-    new Map();
-
-const loadedAlbumTracks =
-    new Set();
-let adminSelectedTrackIds =
-    new Set();
-
-
 let spotifyDeviceId = null;
-
 let spotifySDKReady = false;
+
+let songs = [];
 
 let currentMode = null;
 let currentAttempt = 1;
-
-
 let currentSong = null;
+let currentDifficulty = "easy";   // dificultad de la ronda en curso
 let selectedTrack = null;
 let fragmentStartMs = 0;
+
+// Dificultad elegida en la pantalla principal (la usa el modo infinito).
 let selectedDifficulty = "easy";
 
 let isPlaying = false;
-
 let fragmentTimer = null;
 let searchTimeout = null;
 let lastRoundResult = null;
 
-const attemptStates = [
-    null,
-    null,
-    null,
-    null,
-    null
-];
+const attemptStates = [null, null, null, null, null];
+
+// Administración
+let selectedAdminArtist = null;
+let adminAlbums = [];
+let adminSelectedSongs = new Map();
+const loadedAlbumTracks = new Set();
 
 
 // =====================================================
 // ELEMENTOS DOM
 // =====================================================
 
-const homeButton =
-    document.getElementById("homeButton");
+const $ = (id) => document.getElementById(id);
 
-const dailyButton =
-    document.getElementById("dailyButton");
+const homeButton = $("homeButton");
+const dailyButton = $("dailyButton");
+const infiniteButton = $("infiniteButton");
+const homeScreen = $("homeScreen");
+const gameScreen = $("gameScreen");
+const backButton = $("backButton");
 
-const infiniteButton =
-    document.getElementById("infiniteButton");
+const spotifyLoginButton = $("spotifyLoginButton");
+const spotifyUser = $("spotifyUser");
+const spotifyStatus = $("spotifyStatus");
+const logoutButton = $("logoutButton");
 
-const homeScreen =
-    document.getElementById("homeScreen");
+const playButton = $("playButton");
+const playIcon = $("playIcon");
+const gameMode = $("gameMode");
+const difficulty = $("difficulty");
+const roundNumber = $("roundNumber");
+const fragmentTime = $("fragmentTime");
+const guessInput = $("guessInput");
+const guessButton = $("guessButton");
+const skipButton = $("skipButton");
+const searchResults = $("searchResults");
+const attemptText = $("attemptText");
+const attemptDots = document.querySelectorAll(".attempt-dot");
+const result = $("result");
+const loading = $("loading");
 
-const gameScreen =
-    document.getElementById("gameScreen");
+const adminButton = $("adminButton");
+const adminModal = $("adminModal");
+const closeAdminButton = $("closeAdminButton");
+const artistSearchInput = $("artistSearchInput");
+const artistSearchButton = $("artistSearchButton");
+const artistResults = $("artistResults");
+const selectedArtistName = $("selectedArtistName");
+const albumBrowser = $("albumBrowser");
+const albumCount = $("albumCount");
+const albumList = $("albumList");
+const closeArtistButton = $("closeArtistButton");
+const selectedSongsBar = $("selectedSongsBar");
+const selectedSongsText = $("selectedSongsText");
+const addTracksButton = $("addTracksButton");
+const adminMessage = $("adminMessage");
 
-const backButton =
-    document.getElementById("backButton");
+const difficultyOptions = document.querySelectorAll(".difficulty-option");
 
-const spotifyLoginButton =
-    document.getElementById(
-        "spotifyLoginButton"
-    );
+const resultModal = $("resultModal");
+const resultModalTitle = $("resultModalTitle");
+const resultSongImage = $("resultSongImage");
+const resultSongTitle = $("resultSongTitle");
+const resultSongArtist = $("resultSongArtist");
+const nextRoundButton = $("nextRoundButton");
+const closeResultButton = $("closeResultButton");
+const resultDifficultyButtons = document.querySelectorAll(".result-difficulty");
 
-const spotifyUser =
-    document.getElementById(
-        "spotifyUser"
-    );
-
-const spotifyStatus =
-    document.getElementById(
-        "spotifyStatus"
-    );
-
-const logoutButton =
-    document.getElementById(
-        "logoutButton"
-    );
-
-const playButton =
-    document.getElementById(
-        "playButton"
-    );
-
-const playIcon =
-    document.getElementById(
-        "playIcon"
-    );
-
-const gameMode =
-    document.getElementById(
-        "gameMode"
-    );
-
-const difficulty =
-    document.getElementById(
-        "difficulty"
-    );
-
-const roundNumber =
-    document.getElementById(
-        "roundNumber"
-    );
-
-const fragmentTime =
-    document.getElementById(
-        "fragmentTime"
-    );
-
-const guessInput =
-    document.getElementById(
-        "guessInput"
-    );
-
-const guessButton =
-    document.getElementById(
-        "guessButton"
-    );
-
-const skipButton =
-    document.getElementById(
-        "skipButton"
-    );
-
-const searchResults =
-    document.getElementById(
-        "searchResults"
-    );
-
-const attemptText =
-    document.getElementById(
-        "attemptText"
-    );
-
-const attemptDots =
-    document.querySelectorAll(
-        ".attempt-dot"
-    );
-
-const result =
-    document.getElementById(
-        "result"
-    );
-
-const loading =
-    document.getElementById(
-        "loading"
-    );
-const adminButton =
-    document.getElementById(
-        "adminButton"
-    );
-
-const adminModal =
-    document.getElementById(
-        "adminModal"
-    );
-
-const closeAdminButton =
-    document.getElementById(
-        "closeAdminButton"
-    );
-
-const artistSearchInput =
-    document.getElementById(
-        "artistSearchInput"
-    );
-
-const artistSearchButton =
-    document.getElementById(
-        "artistSearchButton"
-    );
-
-const artistResults =
-    document.getElementById(
-        "artistResults"
-    );
-
-const selectedArtistName =
-    document.getElementById(
-        "selectedArtistName"
-    );
-
-const albumBrowser =
-    document.getElementById(
-        "albumBrowser"
-    );
-
-const albumCount =
-    document.getElementById(
-        "albumCount"
-    );
-
-const albumList =
-    document.getElementById(
-        "albumList"
-    );
-
-const closeArtistButton =
-    document.getElementById(
-        "closeArtistButton"
-    );
-
-const selectedSongsBar =
-    document.getElementById(
-        "selectedSongsBar"
-    );
-
-const selectedSongsText =
-    document.getElementById(
-        "selectedSongsText"
-    );
-
-const addTracksButton =
-    document.getElementById(
-        "addTracksButton"
-    );
-
-const adminMessage =
-    document.getElementById(
-        "adminMessage"
-    );
-
-const difficultyOptions =
-    document.querySelectorAll(
-        ".difficulty-option"
-    );
-
-const resultModal =
-    document.getElementById(
-        "resultModal"
-    );
-
-const resultModalTitle =
-    document.getElementById(
-        "resultModalTitle"
-    );
-
-const resultSongImage =
-    document.getElementById(
-        "resultSongImage"
-    );
-
-const resultSongTitle =
-    document.getElementById(
-        "resultSongTitle"
-    );
-
-const resultSongArtist =
-    document.getElementById(
-        "resultSongArtist"
-    );
-
-const nextRoundButton =
-    document.getElementById(
-        "nextRoundButton"
-    );
-
-closeResultButton.addEventListener(
-    "click",
-    async () => {
-
-        resultModal.classList.add(
-            "hidden"
-        );
-
-        await goHome();
-
-    }
-);
-
-const resultDifficultyButtons =
-    document.querySelectorAll(
-        ".result-difficulty"
-    );
 
 // =====================================================
 // UTILIDADES
 // =====================================================
 
 function getAccessToken() {
-    return localStorage.getItem(
-        "spotify_access_token"
-    );
+    return localStorage.getItem("spotify_access_token");
 }
-
 
 function setLoading(value) {
-    loading.classList.toggle(
-        "hidden",
-        !value
-    );
+    loading.classList.toggle("hidden", !value);
 }
-
 
 function escapeHtml(value) {
     return String(value)
@@ -355,360 +152,206 @@ function normalizeSongText(text) {
         .trim();
 }
 
-function areSongsEqual(
-    selectedTrack,
-    currentSong
-) {
-    if (!selectedTrack || !currentSong) {
-        return false;
-    }
+function artistsToText(artists) {
+    return artists.map((artist) => artist.name).join(", ");
+}
 
-    const selectedTitle =
-        normalizeSongText(
-            selectedTrack.name
-        );
-
-    const currentTitle =
-        normalizeSongText(
-            currentSong.name
-        );
-
-    const selectedArtist =
-        normalizeSongText(
-            selectedTrack.artists
-                .map(
-                    (artist) =>
-                        artist.name
-                )
-                .join(", ")
-        );
-
-    const currentArtist =
-        normalizeSongText(
-            currentSong.artists
-                .map(
-                    (artist) =>
-                        artist.name
-                )
-                .join(", ")
-        );
+function areSongsEqual(a, b) {
+    if (!a || !b) return false;
 
     return (
-        selectedTitle === currentTitle &&
-        selectedArtist === currentArtist
+        normalizeSongText(a.name) === normalizeSongText(b.name) &&
+        normalizeSongText(artistsToText(a.artists)) ===
+            normalizeSongText(artistsToText(b.artists))
     );
 }
+
 
 // =====================================================
 // OAUTH PKCE
 // =====================================================
 
 function generateCodeVerifier(length = 64) {
-
     const characters =
         "ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
         "abcdefghijklmnopqrstuvwxyz" +
         "0123456789-._~";
 
-    const values =
-        new Uint8Array(length);
-
+    const values = new Uint8Array(length);
     crypto.getRandomValues(values);
 
     let verifier = "";
-
     for (const value of values) {
-
-        verifier +=
-            characters[
-                value % characters.length
-            ];
-
+        verifier += characters[value % characters.length];
     }
-
     return verifier;
 }
 
+async function generateCodeChallenge(verifier) {
+    const data = new TextEncoder().encode(verifier);
+    const digest = await crypto.subtle.digest("SHA-256", data);
 
-async function generateCodeChallenge(
-    verifier
-) {
-
-    const data =
-        new TextEncoder().encode(
-            verifier
-        );
-
-    const digest =
-        await crypto.subtle.digest(
-            "SHA-256",
-            data
-        );
-
-    return btoa(
-        String.fromCharCode(
-            ...new Uint8Array(digest)
-        )
-    )
+    return btoa(String.fromCharCode(...new Uint8Array(digest)))
         .replace(/\+/g, "-")
         .replace(/\//g, "_")
         .replace(/=+$/, "");
 }
 
-
 async function loginWithSpotify() {
-
     try {
+        const verifier = generateCodeVerifier();
+        localStorage.setItem("spotify_code_verifier", verifier);
 
-        const verifier =
-            generateCodeVerifier();
+        const challenge = await generateCodeChallenge(verifier);
 
-        localStorage.setItem(
-            "spotify_code_verifier",
-            verifier
-        );
+        const authUrl = new URL("https://accounts.spotify.com/authorize");
+        authUrl.searchParams.set("client_id", CLIENT_ID);
+        authUrl.searchParams.set("response_type", "code");
+        authUrl.searchParams.set("redirect_uri", REDIRECT_URI);
+        authUrl.searchParams.set("scope", SCOPES);
+        authUrl.searchParams.set("code_challenge_method", "S256");
+        authUrl.searchParams.set("code_challenge", challenge);
 
-        const challenge =
-            await generateCodeChallenge(
-                verifier
-            );
-
-        const authUrl =
-            new URL(
-                "https://accounts.spotify.com/authorize"
-            );
-
-        authUrl.searchParams.set(
-            "client_id",
-            CLIENT_ID
-        );
-
-        authUrl.searchParams.set(
-            "response_type",
-            "code"
-        );
-
-        authUrl.searchParams.set(
-            "redirect_uri",
-            REDIRECT_URI
-        );
-
-        authUrl.searchParams.set(
-            "scope",
-            SCOPES
-        );
-
-        authUrl.searchParams.set(
-            "code_challenge_method",
-            "S256"
-        );
-
-        authUrl.searchParams.set(
-            "code_challenge",
-            challenge
-        );
-
-        window.location.href =
-            authUrl.toString();
-
+        window.location.href = authUrl.toString();
     } catch (error) {
-
-        console.error(
-            "Error iniciando Spotify:",
-            error
-        );
-
+        console.error("Error iniciando Spotify:", error);
     }
 }
 
-
-async function exchangeCodeForToken(
-    code
-) {
-
-    const verifier =
-        localStorage.getItem(
-            "spotify_code_verifier"
-        );
+async function exchangeCodeForToken(code) {
+    const verifier = localStorage.getItem("spotify_code_verifier");
 
     if (!verifier) {
-
-        throw new Error(
-            "No se encontró el code_verifier."
-        );
-
+        throw new Error("No se encontró el code_verifier.");
     }
 
-    const body =
-        new URLSearchParams({
-            client_id: CLIENT_ID,
-            grant_type:
-                "authorization_code",
-            code,
-            redirect_uri:
-                REDIRECT_URI,
-            code_verifier:
-                verifier
-        });
+    const body = new URLSearchParams({
+        client_id: CLIENT_ID,
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: REDIRECT_URI,
+        code_verifier: verifier
+    });
 
-    const response =
-        await fetch(
-            "https://accounts.spotify.com/api/token",
-            {
-                method: "POST",
-
-                headers: {
-                    "Content-Type":
-                        "application/x-www-form-urlencoded"
-                },
-
-                body
-            }
-        );
+    const response = await fetch("https://accounts.spotify.com/api/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body
+    });
 
     if (!response.ok) {
-
-        throw new Error(
-            await response.text()
-        );
-
+        throw new Error(await response.text());
     }
 
     return response.json();
 }
-// =====================================================
-// Administración
-// =====================================================
 
-function openAdmin() {
+async function handleSpotifyCallback() {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("code");
+    const error = params.get("error");
 
-    adminModal.classList.remove(
-        "hidden"
-    );
+    if (error) {
+        console.error("Spotify OAuth:", error);
+        return;
+    }
 
-    artistSearchInput.focus();
+    if (!code) return;
 
+    setLoading(true);
+
+    try {
+        const tokenData = await exchangeCodeForToken(code);
+
+        localStorage.setItem("spotify_access_token", tokenData.access_token);
+
+        if (tokenData.refresh_token) {
+            localStorage.setItem("spotify_refresh_token", tokenData.refresh_token);
+        }
+
+        localStorage.removeItem("spotify_code_verifier");
+
+        window.history.replaceState({}, document.title, "/");
+
+        await showSpotifyUser();
+        await waitForSpotifySDK();
+        await initializeSpotifyPlayer();
+    } catch (error) {
+        console.error("Error conectando Spotify:", error);
+    } finally {
+        setLoading(false);
+    }
 }
 
-
-function closeAdmin() {
-
-    adminModal.classList.add(
-        "hidden"
-    );
-
-}
 
 // =====================================================
 // PERFIL SPOTIFY
 // =====================================================
 
-async function getSpotifyProfile(
-    accessToken
-) {
-
-    const response =
-        await fetch(
-            "https://api.spotify.com/v1/me",
-            {
-                headers: {
-                    Authorization:
-                        `Bearer ${accessToken}`
-                }
-            }
-        );
+async function getSpotifyProfile(accessToken) {
+    const response = await fetch("https://api.spotify.com/v1/me", {
+        headers: { Authorization: `Bearer ${accessToken}` }
+    });
 
     if (!response.ok) {
-
-        throw new Error(
-            "No se pudo obtener el perfil de Spotify."
-        );
-
+        throw new Error("No se pudo obtener el perfil de Spotify.");
     }
 
     return response.json();
 }
 
-
 async function showSpotifyUser() {
-
-    const token =
-        getAccessToken();
+    const token = getAccessToken();
 
     if (!token) {
-
-        spotifyLoginButton
-            .classList.remove("hidden");
-
-        spotifyUser
-            .classList.add("hidden");
-
+        spotifyLoginButton.classList.remove("hidden");
+        spotifyUser.classList.add("hidden");
         return;
     }
 
     try {
+        const profile = await getSpotifyProfile(token);
 
-        const profile =
-            await getSpotifyProfile(
-                token
-            );
+        spotifyStatus.textContent = profile.display_name || profile.id;
 
-        spotifyStatus.textContent =
-            profile.display_name ||
-            profile.id;
-
-        spotifyLoginButton
-            .classList.add("hidden");
-
-        spotifyUser
-            .classList.remove("hidden");
-
+        spotifyLoginButton.classList.add("hidden");
+        spotifyUser.classList.remove("hidden");
     } catch (error) {
-
-        console.error(
-            "Error obteniendo perfil:",
-            error
-        );
-
+        console.error("Error obteniendo perfil:", error);
         logoutSpotify();
-
     }
 }
 
-// =====================================================
-// Dificultad
-// =====================================================
-function getSongsByDifficulty(
-    difficulty
-) {
+function logoutSpotify() {
+    clearFragmentTimer();
 
-    return songs.filter(
-        (song) =>
-            song.difficulty === difficulty
-    );
+    if (spotifyPlayer) {
+        spotifyPlayer.disconnect();
+        spotifyPlayer = null;
+        spotifyDeviceId = null;
+    }
 
+    localStorage.removeItem("spotify_access_token");
+    localStorage.removeItem("spotify_refresh_token");
+    localStorage.removeItem("spotify_code_verifier");
+
+    spotifyLoginButton.classList.remove("hidden");
+    spotifyUser.classList.add("hidden");
+
+    isPlaying = false;
+    updatePlayButton();
 }
 
-const DIFFICULTIES = [
-    "easy",
-    "medium",
-    "hard",
-    "impossible"
-];
 
-const DIFFICULTY_ORDER = [
-    "easy",
-    "medium",
-    "hard",
-    "impossible"
-];
+// =====================================================
+// DIFICULTAD (utilidades compartidas)
+// =====================================================
 
-let currentDifficultyIndex = 0;
+function getSongsByDifficulty(difficultyKey) {
+    return songs.filter((song) => song.difficulty === difficultyKey);
+}
 
-function getDifficultyLabel(
-    difficulty
-) {
-
+function getDifficultyLabel(difficultyKey) {
     const labels = {
         easy: "FÁCIL",
         medium: "INTERMEDIO",
@@ -716,205 +359,47 @@ function getDifficultyLabel(
         impossible: "IMPOSIBLE"
     };
 
-    return labels[
-        difficulty
-    ] || difficulty.toUpperCase();
-
+    return labels[difficultyKey] || String(difficultyKey).toUpperCase();
 }
-function increaseDifficulty() {
 
-    if (
-        currentDifficultyIndex <
-        DIFFICULTIES.length - 1
-    ) {
+function getRandomSong(difficultyKey) {
+    const available = getSongsByDifficulty(difficultyKey);
 
-        currentDifficultyIndex++;
-
+    if (available.length === 0) {
+        throw new Error(`No hay canciones para ${difficultyKey}`);
     }
 
-}
-function decreaseDifficulty() {
-
-    if (
-        currentDifficultyIndex > 0
-    ) {
-
-        currentDifficultyIndex--;
-
-    }
-
+    return available[Math.floor(Math.random() * available.length)];
 }
 
-function getRandomSong(
-    difficulty
-) {
-
-    const availableSongs =
-        getSongsByDifficulty(
-            difficulty
-        );
-
-    if (
-        availableSongs.length === 0
-    ) {
-
-        throw new Error(
-            `No hay canciones para ${difficulty}`
-        );
-
-    }
-
-    const randomIndex =
-        Math.floor(
-            Math.random() *
-            availableSongs.length
-        );
-
-    return availableSongs[
-        randomIndex
-    ];
-}
-
+// Selector de la pantalla principal (afecta al modo infinito).
 function setDifficulty(difficultyKey) {
+    selectedDifficulty = difficultyKey;
 
-    selectedDifficulty =
-        difficultyKey;
-
-
-    difficultyOptions.forEach(
-        (button) => {
-
-            button.classList.toggle(
-                "selected",
-                button.dataset.difficulty ===
-                    difficultyKey
-            );
-
-        }
-    );
-
-
-    console.log(
-        "Siguiente dificultad:",
-        selectedDifficulty
-    );
-
+    difficultyOptions.forEach((button) => {
+        button.classList.toggle(
+            "selected",
+            button.dataset.difficulty === difficultyKey
+        );
+    });
 }
 
-function getNextDifficulty() {
-
-    const currentIndex =
-        DIFFICULTY_ORDER.indexOf(
-            selectedDifficulty
-        );
-
-    if (
-        currentIndex === -1
-    ) {
-
-        return "easy";
-
+function generateRandomFragmentStart(durationMs, rand = Math.random) {
+    if (!durationMs) {
+        // Canciones guardadas antes de registrar la duración.
+        return Math.floor(rand() * 120000);
     }
 
-    if (
-        currentIndex >=
-        DIFFICULTY_ORDER.length - 1
-    ) {
+    const maxFragmentDuration =
+        ATTEMPT_DURATIONS[ATTEMPT_DURATIONS.length - 1] * 1000;
 
-        return "easy";
+    const safetyMargin = 1000;
 
-    }
+    const maximumStart = durationMs - maxFragmentDuration - safetyMargin;
 
-    return DIFFICULTY_ORDER[
-        currentIndex + 1
-    ];
+    if (maximumStart <= 0) return 0;
 
-}
-
-
-// =====================================================
-// CALLBACK OAUTH
-// =====================================================
-
-async function handleSpotifyCallback() {
-
-    const params =
-        new URLSearchParams(
-            window.location.search
-        );
-
-    const code =
-        params.get("code");
-
-    const error =
-        params.get("error");
-
-    if (error) {
-
-        console.error(
-            "Spotify OAuth:",
-            error
-        );
-
-        return;
-
-    }
-
-    if (!code) {
-        return;
-    }
-
-    setLoading(true);
-
-    try {
-
-        const tokenData =
-            await exchangeCodeForToken(
-                code
-            );
-
-        localStorage.setItem(
-            "spotify_access_token",
-            tokenData.access_token
-        );
-
-        if (tokenData.refresh_token) {
-
-            localStorage.setItem(
-                "spotify_refresh_token",
-                tokenData.refresh_token
-            );
-
-        }
-
-        localStorage.removeItem(
-            "spotify_code_verifier"
-        );
-
-        window.history.replaceState(
-            {},
-            document.title,
-            "/"
-        );
-
-        await showSpotifyUser();
-
-        await waitForSpotifySDK();
-
-        await initializeSpotifyPlayer();
-
-    } catch (error) {
-
-        console.error(
-            "Error conectando Spotify:",
-            error
-        );
-
-    } finally {
-
-        setLoading(false);
-
-    }
+    return Math.floor(rand() * maximumStart);
 }
 
 
@@ -923,719 +408,395 @@ async function handleSpotifyCallback() {
 // =====================================================
 
 function waitForSpotifySDK() {
-
-    return new Promise(
-        (resolve) => {
-
-            if (
-                typeof Spotify !==
-                "undefined" &&
-                Spotify.Player
-            ) {
-
-                spotifySDKReady = true;
-
-                resolve();
-
-                return;
-            }
-
-            if (window.spotifySDKReady) {
-
-                spotifySDKReady = true;
-
-                resolve();
-
-                return;
-            }
-
-            window.addEventListener(
-                "spotify-sdk-ready",
-                () => {
-
-                    spotifySDKReady = true;
-
-                    resolve();
-
-                },
-                {
-                    once: true
-                }
-            );
-
+    return new Promise((resolve) => {
+        if (typeof Spotify !== "undefined" && Spotify.Player) {
+            spotifySDKReady = true;
+            resolve();
+            return;
         }
-    );
+
+        if (window.spotifySDKReady) {
+            spotifySDKReady = true;
+            resolve();
+            return;
+        }
+
+        window.addEventListener(
+            "spotify-sdk-ready",
+            () => {
+                spotifySDKReady = true;
+                resolve();
+            },
+            { once: true }
+        );
+    });
 }
 
-
 async function initializeSpotifyPlayer() {
+    const token = getAccessToken();
 
-    const token =
-        getAccessToken();
-
-    if (!token) {
-        return;
-    }
-
-    if (spotifyPlayer) {
-        return;
-    }
+    if (!token) return;
+    if (spotifyPlayer) return;
 
     await waitForSpotifySDK();
 
-    spotifyPlayer =
-        new Spotify.Player({
+    spotifyPlayer = new Spotify.Player({
+        name: "Songless",
+        getOAuthToken(callback) {
+            callback(getAccessToken());
+        },
+        volume: 0.5
+    });
 
-            name: "Songless",
+    spotifyPlayer.addListener("ready", ({ device_id }) => {
+        spotifyDeviceId = device_id;
+        console.log("Songless listo:", device_id);
+    });
 
-            getOAuthToken(callback) {
+    spotifyPlayer.addListener("not_ready", ({ device_id }) => {
+        console.warn("Spotify device no disponible:", device_id);
 
-                callback(
-                    getAccessToken()
-                );
-
-            },
-
-            volume: 0.5
-
-        });
-
-
-    spotifyPlayer.addListener(
-        "ready",
-        ({ device_id }) => {
-
-            spotifyDeviceId =
-                device_id;
-
-            console.log(
-                "Songless listo:",
-                device_id
-            );
-
+        if (spotifyDeviceId === device_id) {
+            spotifyDeviceId = null;
         }
-    );
+    });
 
+    spotifyPlayer.addListener("player_state_changed", (state) => {
+        if (!state) return;
 
-    spotifyPlayer.addListener(
-        "not_ready",
-        ({ device_id }) => {
+        isPlaying = !state.paused;
+        updatePlayButton();
+    });
 
-            console.warn(
-                "Spotify device no disponible:",
-                device_id
-            );
+    spotifyPlayer.addListener("initialization_error", ({ message }) => {
+        console.error("Spotify initialization:", message);
+    });
 
-            if (
-                spotifyDeviceId ===
-                device_id
-            ) {
+    spotifyPlayer.addListener("authentication_error", ({ message }) => {
+        console.error("Spotify authentication:", message);
+    });
 
-                spotifyDeviceId = null;
+    spotifyPlayer.addListener("account_error", ({ message }) => {
+        console.error("Spotify account:", message);
+    });
 
-            }
+    const connected = await spotifyPlayer.connect();
 
-        }
-    );
-
-
-    spotifyPlayer.addListener(
-        "player_state_changed",
-        (state) => {
-
-            if (!state) {
-                return;
-            }
-
-            isPlaying =
-                !state.paused;
-
-            updatePlayButton();
-
-        }
-    );
-
-
-    spotifyPlayer.addListener(
-        "initialization_error",
-        ({ message }) => {
-
-            console.error(
-                "Spotify initialization:",
-                message
-            );
-
-        }
-    );
-
-
-    spotifyPlayer.addListener(
-        "authentication_error",
-        ({ message }) => {
-
-            console.error(
-                "Spotify authentication:",
-                message
-            );
-
-        }
-    );
-
-
-    spotifyPlayer.addListener(
-        "account_error",
-        ({ message }) => {
-
-            console.error(
-                "Spotify account:",
-                message
-            );
-
-        }
-    );
-
-
-    const connected =
-        await spotifyPlayer.connect();
-
-    console.log(
-        "Spotify player conectado:",
-        connected
-    );
+    console.log("Spotify player conectado:", connected);
 }
 
 
 // =====================================================
-// PLAY / PAUSE
+// REPRODUCCIÓN
 // =====================================================
 
 async function togglePlayback() {
-
     if (!spotifyPlayer) {
-
-        console.warn(
-            "El reproductor todavía no está listo."
-        );
-
+        console.warn("El reproductor todavía no está listo.");
         return;
-
     }
 
     if (!spotifyDeviceId) {
-
-        console.warn(
-            "No hay dispositivo Spotify disponible."
-        );
-
+        console.warn("No hay dispositivo Spotify disponible.");
         return;
-
     }
-
 
     if (isPlaying) {
-
         clearFragmentTimer();
-
         await spotifyPlayer.pause();
-
         isPlaying = false;
-
         updatePlayButton();
-
         return;
-
     }
-
 
     await playFragment();
 }
 
-
 async function playFragment() {
+    const token = getAccessToken();
 
-    const token =
-        getAccessToken();
+    if (!token || !spotifyDeviceId || !currentSong) return;
 
-    if (!token || !spotifyDeviceId) {
-        return;
-    }
-
-    const duration =
-        ATTEMPT_DURATIONS[
-            currentAttempt - 1
-        ];
+    const duration = ATTEMPT_DURATIONS[currentAttempt - 1];
 
     clearFragmentTimer();
 
-
-    const response =
-        await fetch(
-            `https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(spotifyDeviceId)}`,
-            {
-                method: "PUT",
-
-                headers: {
-                    Authorization:
-                        `Bearer ${token}`,
-
-                    "Content-Type":
-                        "application/json"
-                },
-
-                body: JSON.stringify({
-                    uris: [
-                        currentSong.uri
-                    ],
-
-                    position_ms:
-                        fragmentStartMs
-                })
-            }
-        );
-
+    const response = await fetch(
+        `https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(spotifyDeviceId)}`,
+        {
+            method: "PUT",
+            headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                uris: [currentSong.uri],
+                position_ms: fragmentStartMs
+            })
+        }
+    );
 
     if (!response.ok) {
-
-        console.error(
-            "Error reproduciendo:",
-            await response.text()
-        );
-
+        console.error("Error reproduciendo:", await response.text());
         return;
-
     }
 
-
     isPlaying = true;
-
     updatePlayButton();
 
-    startFragmentTimer(
-        duration
-    );
+    startFragmentTimer(duration);
 }
-
-
-// =====================================================
-// TEMPORIZADOR DEL FRAGMENTO
-// =====================================================
 
 function startFragmentTimer(seconds) {
-
     clearFragmentTimer();
 
-    fragmentTimer =
-        setTimeout(
-            async () => {
+    fragmentTimer = setTimeout(async () => {
+        if (spotifyPlayer && isPlaying) {
+            try {
+                await spotifyPlayer.pause();
+            } catch (error) {
+                console.error("Error pausando:", error);
+            }
+        }
 
-                if (
-                    spotifyPlayer &&
-                    isPlaying
-                ) {
-
-                    try {
-
-                        await spotifyPlayer.pause();
-
-                    } catch (error) {
-
-                        console.error(
-                            "Error pausando:",
-                            error
-                        );
-
-                    }
-
-                }
-
-                isPlaying = false;
-
-                updatePlayButton();
-
-            },
-            seconds * 1000
-        );
+        isPlaying = false;
+        updatePlayButton();
+    }, seconds * 1000);
 }
 
-
 function clearFragmentTimer() {
-
     if (fragmentTimer) {
-
-        clearTimeout(
-            fragmentTimer
-        );
-
+        clearTimeout(fragmentTimer);
         fragmentTimer = null;
     }
 }
 
-
-// =====================================================
-// BOTÓN PLAY
-// =====================================================
-
 function updatePlayButton() {
-
     if (isPlaying) {
-
-        playIcon.textContent =
-            "❚❚";
-
-        playButton.setAttribute(
-            "aria-label",
-            "Pausar"
-        );
-
+        playIcon.textContent = "❚❚";
+        playButton.setAttribute("aria-label", "Pausar");
     } else {
-
-        playIcon.textContent =
-            "▶";
-
-        playButton.setAttribute(
-            "aria-label",
-            "Reproducir"
-        );
-
+        playIcon.textContent = "▶";
+        playButton.setAttribute("aria-label", "Reproducir");
     }
 }
 
-
-// =====================================================
-// BÚSQUEDA SPOTIFY
-// =====================================================
-
-async function searchSpotifyTracks(
-    query
-) {
-
-    const token =
-        getAccessToken();
-
-    if (!token) {
-        return;
-    }
-
-    const trimmedQuery =
-        query.trim();
-
-    if (
-        trimmedQuery.length < 2
-    ) {
-
-        searchResults.classList.add(
-            "hidden"
-        );
-
-        return;
-    }
-
-
-    searchResults.classList.remove(
-        "hidden"
-    );
-
-    searchResults.innerHTML =
-        `
-        <div class="search-message">
-            Buscando...
-        </div>
-        `;
-
-
-    try {
-
-        const url =
-            new URL(
-                "https://api.spotify.com/v1/search"
-            );
-
-        url.searchParams.set(
-            "q",
-            trimmedQuery
-        );
-
-        url.searchParams.set(
-            "type",
-            "track"
-        );
-
-        url.searchParams.set(
-            "limit",
-            "5"
-        );
-
-
-        const response =
-            await fetch(
-                url,
-                {
-                    headers: {
-                        Authorization:
-                            `Bearer ${token}`
-                    }
-                }
-            );
-
-
-        if (!response.ok) {
-
-            throw new Error(
-                await response.text()
-            );
-
-        }
-
-
-        const data =
-            await response.json();
-
-
-        renderSearchResults(
-            data.tracks?.items || []
-        );
-
-
-    } catch (error) {
-
-        console.error(
-            "Error buscando canciones:",
-            error
-        );
-
-        searchResults.innerHTML =
-            `
-            <div class="search-message">
-                Error realizando la búsqueda.
-            </div>
-            `;
-
-    }
-}
-
-
-function renderSearchResults(
-    tracks
-) {
-
-    searchResults.innerHTML = "";
-
-
-    if (!tracks.length) {
-
-        searchResults.innerHTML =
-            `
-            <div class="search-message">
-                No encontramos canciones.
-            </div>
-            `;
-
-        return;
-    }
-
-
-    tracks.forEach(
-        (track) => {
-
-            const button =
-                document.createElement(
-                    "button"
-                );
-
-            button.className =
-                "search-result";
-
-
-            const image =
-                track.album?.images?.[2]?.url ||
-                track.album?.images?.[0]?.url ||
-                "";
-
-
-            const artists =
-                track.artists
-                    .map(
-                        (artist) =>
-                            artist.name
-                    )
-                    .join(", ");
-
-
-            button.innerHTML = `
-                ${
-                    image
-                        ? `
-                        <img
-                            class="search-result-image"
-                            src="${image}"
-                            alt=""
-                        >
-                        `
-                        : `
-                        <div
-                            class="search-result-image"
-                        ></div>
-                        `
-                }
-
-                <div class="search-result-info">
-
-                    <span class="search-result-title">
-                        ${escapeHtml(
-                            track.name
-                        )}
-                    </span>
-
-                    <span class="search-result-artist">
-                        ${escapeHtml(
-                            artists
-                        )}
-                    </span>
-
-                </div>
-            `;
-
-
-            button.addEventListener(
-                "click",
-                () => {
-
-                    selectTrack(
-                        track
-                    );
-
-                }
-            );
-
-
-            searchResults.appendChild(
-                button
-            );
-
-        }
-    );
-}
-
-
-function selectTrack(track) {
-
-    selectedTrack =
-        track;
-
-    const artists =
-        track.artists
-            .map(
-                (artist) =>
-                    artist.name
-            )
-            .join(", ");
-
-
-    guessInput.value =
-        `${track.name} — ${artists}`;
-
-
-    searchResults.classList.add(
-        "hidden"
-    );
-}
-
-// =====================================================
-// COMPROBAR RESPUESTA
-// =====================================================
-
-async function makeGuess() {
-
-    if (!selectedTrack) {
-
-        result.textContent =
-            "Selecciona una canción de la lista.";
-
-        return;
-
-    }
-
-
-    if (!currentSong) {
-        return;
-    }
-
-
-    const isCorrect =
-    areSongsEqual(
-        selectedTrack,
-        currentSong
-    );
-
-
-    if (isCorrect) {
-
-    attemptStates[
-        currentAttempt - 1
-    ] = "completed";
-
-    updateAttempts();
-
-    showRoundResult(
-        true
-    );
-
-    return;
-
-}
-
-
-    await consumeAttempt(
-        "failed"
-    );
-}
-
-
-// =====================================================
-// CONSUMIR INTENTO
-// =====================================================
-
-async function consumeAttempt(
-    reason
-) {
-
+async function stopPlayback() {
     clearFragmentTimer();
 
     if (spotifyPlayer) {
-
-        await spotifyPlayer.pause();
-
+        try {
+            await spotifyPlayer.pause();
+        } catch (error) {
+            console.error("Error pausando:", error);
+        }
     }
 
     isPlaying = false;
-
     updatePlayButton();
-
-
-    attemptStates[
-        currentAttempt - 1
-    ] = reason;
-
-
-  if (currentAttempt >= 5) {
-
-    updateAttempts();
-
-    showRoundResult(
-        false
-    );
-
-    return;
-
 }
 
 
-    currentAttempt++;
+// =====================================================
+// BÚSQUEDA SPOTIFY (cuadro de respuesta)
+// =====================================================
 
+async function searchSpotifyTracks(query) {
+    const token = getAccessToken();
+
+    if (!token) return;
+
+    const trimmedQuery = query.trim();
+
+    if (trimmedQuery.length < 2) {
+        searchResults.classList.add("hidden");
+        return;
+    }
+
+    searchResults.classList.remove("hidden");
+    searchResults.innerHTML = `<div class="search-message">Buscando...</div>`;
+
+    try {
+        const url = new URL("https://api.spotify.com/v1/search");
+        url.searchParams.set("q", trimmedQuery);
+        url.searchParams.set("type", "track");
+        url.searchParams.set("limit", "5");
+
+        const response = await fetch(url, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+
+        if (!response.ok) {
+            throw new Error(await response.text());
+        }
+
+        const data = await response.json();
+
+        renderSearchResults(data.tracks?.items || []);
+    } catch (error) {
+        console.error("Error buscando canciones:", error);
+
+        searchResults.innerHTML =
+            `<div class="search-message">Error realizando la búsqueda.</div>`;
+    }
+}
+
+function renderSearchResults(tracks) {
+    searchResults.innerHTML = "";
+
+    if (!tracks.length) {
+        searchResults.innerHTML =
+            `<div class="search-message">No encontramos canciones.</div>`;
+        return;
+    }
+
+    tracks.forEach((track) => {
+        const button = document.createElement("button");
+        button.className = "search-result";
+
+        const image =
+            track.album?.images?.[2]?.url ||
+            track.album?.images?.[0]?.url ||
+            "";
+
+        const artists = artistsToText(track.artists);
+
+        button.innerHTML = `
+            ${
+                image
+                    ? `<img class="search-result-image" src="${escapeHtml(image)}" alt="">`
+                    : `<div class="search-result-image"></div>`
+            }
+            <div class="search-result-info">
+                <span class="search-result-title">${escapeHtml(track.name)}</span>
+                <span class="search-result-artist">${escapeHtml(artists)}</span>
+            </div>
+        `;
+
+        button.addEventListener("click", () => selectTrack(track));
+
+        searchResults.appendChild(button);
+    });
+}
+
+function selectTrack(track) {
+    selectedTrack = track;
+
+    guessInput.value = `${track.name} — ${artistsToText(track.artists)}`;
+
+    searchResults.classList.add("hidden");
+}
+
+
+// =====================================================
+// MOTOR DE RONDA (compartido por los dos modos)
+// =====================================================
+
+function buildCurrentSong(song) {
+    return {
+        id: song.spotifyId,
+        uri: song.uri || `spotify:track:${song.spotifyId}`,
+        name: song.title,
+        artists: [{ name: song.artist }],
+        albumImage: song.albumImage || "",
+        durationMs: song.durationMs || 0,
+        difficulty: song.difficulty
+    };
+}
+
+// Prepara y muestra una ronda. Cada modo decide la canción y el fragmento.
+async function prepareRound({ mode, song, startMs, round }) {
+    await stopPlayback();
+
+    resultModal.classList.add("hidden");
+
+    currentMode = mode;
+    currentAttempt = 1;
     selectedTrack = null;
+    attemptStates.fill(null);
 
+    currentSong = buildCurrentSong(song);
+    currentDifficulty = song.difficulty;
+    fragmentStartMs = startMs;
+
+    guessInput.disabled = false;
+    guessButton.disabled = false;
+    skipButton.disabled = false;
     guessInput.value = "";
+    result.textContent = "";
 
+    gameMode.textContent = mode === "daily" ? "DIARIO" : "INFINITO";
+    difficulty.textContent = getDifficultyLabel(currentDifficulty);
+    roundNumber.textContent = String(round).padStart(2, "0");
+
+    // Elegir dificultad en el modal solo tiene sentido en infinito.
+    resultDifficultyButtons.forEach((button) => {
+        button.classList.toggle("hidden", mode === "daily");
+    });
+
+    updateAttempts();
+
+    homeScreen.classList.add("hidden");
+    gameScreen.classList.remove("hidden");
+}
+
+function updateAttempts() {
+    attemptText.textContent = `${currentAttempt} / 5`;
+
+    const seconds = ATTEMPT_DURATIONS[currentAttempt - 1];
+
+    fragmentTime.textContent =
+        `${seconds} ${seconds === 1 ? "segundo" : "segundos"}`;
+
+    attemptDots.forEach((dot, index) => {
+        dot.classList.remove("active", "failed", "skipped", "completed");
+
+        const state = attemptStates[index];
+
+        if (state === "failed" || state === "skipped" || state === "completed") {
+            dot.classList.add(state);
+        } else if (index === currentAttempt - 1) {
+            dot.classList.add("active");
+        }
+    });
+}
+
+async function makeGuess() {
+    if (!selectedTrack) {
+        result.textContent = "Selecciona una canción de la lista.";
+        return;
+    }
+
+    if (!currentSong) return;
+
+    if (areSongsEqual(selectedTrack, currentSong)) {
+        attemptStates[currentAttempt - 1] = "completed";
+        updateAttempts();
+        await showRoundResult(true);
+        return;
+    }
+
+    await consumeAttempt("failed");
+}
+
+async function skip() {
+    await consumeAttempt("skipped");
+}
+
+async function consumeAttempt(reason) {
+    await stopPlayback();
+
+    attemptStates[currentAttempt - 1] = reason;
+
+    if (currentAttempt >= 5) {
+        updateAttempts();
+        await showRoundResult(false);
+        return;
+    }
+
+    currentAttempt++;
+    selectedTrack = null;
+    guessInput.value = "";
     result.textContent = "";
 
     updateAttempts();
@@ -1643,670 +804,60 @@ async function consumeAttempt(
     guessInput.focus();
 }
 
+async function showRoundResult(won) {
+    await stopPlayback();
 
-// =====================================================
-// PASAR
-// =====================================================
+    lastRoundResult = { won, mode: currentMode, difficulty: currentDifficulty };
 
-async function skip() {
+    resultModalTitle.textContent = won
+        ? "¡CORRECTO! 🎉"
+        : "SE ACABARON LOS INTENTOS";
 
-    await consumeAttempt(
-        "skipped"
-    );
-}
+    if (currentSong) {
+        resultSongTitle.textContent = currentSong.name;
+        resultSongArtist.textContent = artistsToText(currentSong.artists);
 
-
-// =====================================================
-// REVELAR RESPUESTA
-// =====================================================
-
-async function revealAnswer() {
-
-    clearFragmentTimer();
-
-    if (spotifyPlayer) {
-
-        await spotifyPlayer.pause();
-
+        if (currentSong.albumImage) {
+            resultSongImage.src = currentSong.albumImage;
+            resultSongImage.classList.remove("hidden");
+        } else {
+            resultSongImage.classList.add("hidden");
+        }
     }
 
-    isPlaying = false;
+    const mode = gameModes[currentMode];
 
-    updatePlayButton();
+    mode?.onRoundEnd?.(won);
+    mode?.updateNextButton?.();
 
-
-    const artists =
-        currentSong.artists
-            .map(
-                (artist) =>
-                    artist.name
-            )
-            .join(", ");
-
-
-    result.innerHTML = `
-        La canción era:
-        <strong>
-            ${escapeHtml(
-                currentSong.name
-            )}
-        </strong>
-        —
-        ${escapeHtml(
-            artists
-        )}
-    `;
-
-
-    guessInput.disabled =
-        true;
-
-    guessButton.disabled =
-        true;
-
-    skipButton.disabled =
-        true;
-
+    resultModal.classList.remove("hidden");
 }
 
 
 // =====================================================
-// CARGAR CANCIÓN
-// =====================================================
-
-async function getTrack(
-    trackId
-) {
-
-    const token =
-        getAccessToken();
-
-    const response =
-        await fetch(
-            `https://api.spotify.com/v1/tracks/${encodeURIComponent(trackId)}`,
-            {
-                headers: {
-                    Authorization:
-                        `Bearer ${token}`
-                }
-            }
-        );
-
-
-    if (!response.ok) {
-
-        throw new Error(
-            "No se pudo obtener la canción."
-        );
-
-    }
-
-
-    return response.json();
-}
-
-
-// =====================================================
-// INICIAR PARTIDA
+// NAVEGACIÓN
 // =====================================================
 
 async function startGame(mode) {
+    const handler = gameModes[mode];
 
-    clearFragmentTimer();
-
-    if (spotifyPlayer) {
-        await spotifyPlayer.pause();
-    }
-
-    isPlaying = false;
-
-    updatePlayButton();
-
-    currentMode =
-        mode;
-
-    currentAttempt =
-        1;
-
-    currentSong =
-        null;
-
-    selectedTrack =
-        null;
-
-    attemptStates.fill(
-        null
-    );
-
-    guessInput.disabled =
-        false;
-
-    guessButton.disabled =
-        false;
-
-    skipButton.disabled =
-        false;
-
-    guessInput.value =
-        "";
-
-    result.textContent =
-        "";
-
-    gameMode.textContent =
-        mode === "daily"
-            ? "DIARIO"
-            : "INFINITO";
-
-    difficulty.textContent =
-        getDifficultyLabel(
-            selectedDifficulty
-        );
-
-    roundNumber.textContent =
-        "01";
-
-    updateAttempts();
-
-
-    try {
-
-        const song =
-            getRandomSong(
-                selectedDifficulty
-            );
-
-        currentSong = {
-
-        id:
-            song.spotifyId,
-
-        uri:
-            song.uri ||
-            `spotify:track:${song.spotifyId}`,
-
-        name:
-            song.title,
-
-        artists: [
-            {
-                name:
-                    song.artist
-            }
-        ],
-
-        albumImage:
-            song.albumImage || "",
-
-        durationMs:
-            song.durationMs || 0,
-
-        difficulty:
-            song.difficulty
-    };
-
-    } catch (error) {
-
-        console.error(
-            "Error seleccionando canción:",
-            error
-        );
-
-        result.textContent =
-            "No hay canciones disponibles para esta dificultad.";
-
+    if (!handler) {
+        console.error(`Modo desconocido o no cargado: ${mode}`);
         return;
     }
 
-
-    homeScreen.classList.add(
-        "hidden"
-    );
-
-    gameScreen.classList.remove(
-        "hidden"
-    );
-
+    await handler.start();
 }
-
-
-// =====================================================
-// INTENTOS
-// =====================================================
-
-function updateAttempts() {
-
-    attemptText.textContent =
-        `${currentAttempt} / 5`;
-
-
-    const seconds =
-        ATTEMPT_DURATIONS[
-            currentAttempt - 1
-        ];
-
-
-    fragmentTime.textContent =
-        `${seconds} ${
-            seconds === 1
-                ? "segundo"
-                : "segundos"
-        }`;
-
-
-    attemptDots.forEach(
-        (dot, index) => {
-
-            dot.classList.remove(
-                "active",
-                "failed",
-                "skipped",
-                "completed"
-            );
-
-
-            const state =
-                attemptStates[index];
-
-
-            if (
-                state === "failed"
-            ) {
-
-                dot.classList.add(
-                    "failed"
-                );
-
-            } else if (
-                state === "skipped"
-            ) {
-
-                dot.classList.add(
-                    "skipped"
-                );
-
-            } else if (
-                state === "completed"
-            ) {
-
-                dot.classList.add(
-                    "completed"
-                );
-
-            } else if (
-                index ===
-                currentAttempt - 1
-            ) {
-
-                dot.classList.add(
-                    "active"
-                );
-
-            }
-
-        }
-    );
-
-}
-// =====================================================
-// RONDAS
-// =====================================================
-async function startNextRound() {
-
-    if (currentMode === "daily") {
-
-        // Por ahora el diario termina aquí.
-        return;
-
-    }
-
-    await startGame(
-        currentMode
-    );
-
-}
-
-function showRoundResult(
-    won
-) {
-
-    clearFragmentTimer();
-
-    if (spotifyPlayer) {
-        spotifyPlayer.pause();
-    }
-
-    isPlaying = false;
-
-    updatePlayButton();
-
-
-    lastRoundResult = {
-        won,
-        difficulty:
-            selectedDifficulty
-    };
-
-
-    if (won) {
-
-        resultModalTitle.textContent =
-            "¡CORRECTO! 🎉";
-
-    } else {
-
-        resultModalTitle.textContent =
-            "SE ACABARON LOS INTENTOS";
-
-    }
-
-
-    if (currentSong) {
-
-        resultSongTitle.textContent =
-            currentSong.name;
-
-        resultSongArtist.textContent =
-            currentSong.artists
-                .map(
-                    (artist) =>
-                        artist.name
-                )
-                .join(", ");
-
-
-        if (currentSong.albumImage) {
-
-            resultSongImage.src =
-                currentSong.albumImage;
-
-            resultSongImage.classList.remove(
-                "hidden"
-            );
-
-        } else {
-
-            resultSongImage.classList.add(
-                "hidden"
-            );
-
-        }
-
-    }
-
-
-    updateNextRoundButton();
-
-
-    resultModal.classList.remove(
-        "hidden"
-    );
-
-}
-
-function updateNextRoundButton() {
-
-    const nextDifficulty =
-        getNextDifficulty();
-
-    nextRoundButton.textContent =
-        `SIGUIENTE · ${getDifficultyLabel(
-            nextDifficulty
-        )} →`;
-
-}
-
-async function startNewRound(
-    difficultyKey
-) {
-
-    resultModal.classList.add(
-        "hidden"
-    );
-
-
-    selectedDifficulty =
-        difficultyKey;
-
-
-    setDifficulty(
-        difficultyKey
-    );
-
-
-    currentAttempt =
-        1;
-
-
-    currentSong =
-        null;
-
-    selectedTrack =
-        null;
-
-
-    attemptStates.fill(
-        null
-    );
-
-
-    guessInput.value =
-        "";
-
-    result.textContent =
-        "";
-
-
-    guessInput.disabled =
-        false;
-
-    guessButton.disabled =
-        false;
-
-    skipButton.disabled =
-        false;
-
-
-    updateAttempts();
-
-
-    difficulty.textContent =
-        getDifficultyLabel(
-            selectedDifficulty
-        );
-
-
-    try {
-
-        const song =
-            getRandomSong(
-                selectedDifficulty
-            );
-
-
-        currentSong = {
-
-        id:
-            song.spotifyId,
-
-        uri:
-            song.uri ||
-            `spotify:track:${song.spotifyId}`,
-
-        name:
-            song.title,
-
-        artists: [
-            {
-                name:
-                    song.artist
-            }
-        ],
-
-        albumImage:
-            song.albumImage || "",
-
-        durationMs:
-            song.durationMs || 0,
-
-        difficulty:
-            song.difficulty
-    };
-
-    fragmentStartMs =
-    generateRandomFragmentStart(
-        currentSong.durationMs
-    );
-
-    console.log(
-        "Nuevo fragmento aleatorio:",
-        fragmentStartMs / 1000,
-        "segundos"
-    );
-
-
-    } catch (error) {
-
-        console.error(
-            "Error seleccionando nueva canción:",
-            error
-        );
-
-        result.textContent =
-            "No hay canciones para esta dificultad.";
-
-        return;
-
-    }
-
-
-    gameScreen.classList.remove(
-        "hidden"
-    );
-
-}
-
-function generateRandomFragmentStart(
-    durationMs
-) {
-
-    if (!durationMs) {
-
-        //Borrar solo para canciones antes de actualización de duración
-        return Math.floor(
-            Math.random() * 120000
-        );
-    }
-
-    const maxFragmentDuration =
-        ATTEMPT_DURATIONS[
-            ATTEMPT_DURATIONS.length - 1
-        ] * 1000;
-
-    const safetyMargin =
-        1000;
-
-    const maximumStart =
-        durationMs -
-        maxFragmentDuration -
-        safetyMargin;
-
-    if (
-        maximumStart <= 0
-    ) {
-
-        return 0;
-    }
-
-    return Math.floor(
-        Math.random() *
-        maximumStart
-    );
-
-}
-
-// =====================================================
-// VOLVER AL INICIO
-// =====================================================
 
 async function goHome() {
+    await stopPlayback();
 
-    clearFragmentTimer();
+    currentSong = null;
+    selectedTrack = null;
 
-    if (spotifyPlayer) {
-        await spotifyPlayer.pause();
-    }
-
-    isPlaying = false;
-
-    updatePlayButton();
-
-    currentSong =
-        null;
-
-    selectedTrack =
-        null;
-
-    gameScreen.classList.add(
-        "hidden"
-    );
-
-    homeScreen.classList.remove(
-        "hidden"
-    );
-
-}
-
-
-// =====================================================
-// LOGOUT
-// =====================================================
-
-function logoutSpotify() {
-
-    clearFragmentTimer();
-
-    if (spotifyPlayer) {
-
-        spotifyPlayer.disconnect();
-
-        spotifyPlayer =
-            null;
-
-        spotifyDeviceId =
-            null;
-
-    }
-
-
-    localStorage.removeItem(
-        "spotify_access_token"
-    );
-
-    localStorage.removeItem(
-        "spotify_refresh_token"
-    );
-
-    localStorage.removeItem(
-        "spotify_code_verifier"
-    );
-
-
-    spotifyLoginButton
-        .classList.remove(
-            "hidden"
-        );
-
-    spotifyUser
-        .classList.add(
-            "hidden"
-        );
-
-
-    isPlaying = false;
-
-    updatePlayButton();
-
+    resultModal.classList.add("hidden");
+    gameScreen.classList.add("hidden");
+    homeScreen.classList.remove("hidden");
 }
 
 
@@ -2314,1298 +865,444 @@ function logoutSpotify() {
 // EVENTOS
 // =====================================================
 
-spotifyLoginButton.addEventListener(
-    "click",
-    loginWithSpotify
-);
+spotifyLoginButton.addEventListener("click", loginWithSpotify);
+logoutButton.addEventListener("click", logoutSpotify);
 
+dailyButton.addEventListener("click", () => startGame("daily"));
+infiniteButton.addEventListener("click", () => startGame("infinite"));
 
-logoutButton.addEventListener(
-    "click",
-    logoutSpotify
-);
+homeButton.addEventListener("click", goHome);
+backButton.addEventListener("click", goHome);
 
+playButton.addEventListener("click", togglePlayback);
+guessButton.addEventListener("click", makeGuess);
+skipButton.addEventListener("click", skip);
 
-dailyButton.addEventListener(
-    "click",
-    () => {
-        startGame("daily");
+guessInput.addEventListener("input", () => {
+    selectedTrack = null;
+
+    clearTimeout(searchTimeout);
+
+    const query = guessInput.value;
+
+    searchTimeout = setTimeout(() => searchSpotifyTracks(query), 300);
+});
+
+guessInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") makeGuess();
+});
+
+document.addEventListener("click", (event) => {
+    if (!event.target.closest(".guess-search")) {
+        searchResults.classList.add("hidden");
     }
-);
+});
 
+difficultyOptions.forEach((button) => {
+    button.addEventListener("click", () => {
+        setDifficulty(button.dataset.difficulty);
+    });
+});
 
-infiniteButton.addEventListener(
-    "click",
-    () => {
-        startGame("infinite");
-    }
-);
+// Modal de resultado: delega en el modo activo.
+nextRoundButton.addEventListener("click", async () => {
+    await gameModes[currentMode]?.onNext?.();
+});
 
-
-homeButton.addEventListener(
-    "click",
-    goHome
-);
-
-
-backButton.addEventListener(
-    "click",
-    goHome
-);
-
-
-playButton.addEventListener(
-    "click",
-    togglePlayback
-);
-
-
-guessButton.addEventListener(
-    "click",
-    makeGuess
-);
-
-
-skipButton.addEventListener(
-    "click",
-    skip
-);
-
-
-guessInput.addEventListener(
-    "input",
-    () => {
-
-        selectedTrack =
-            null;
-
-        clearTimeout(
-            searchTimeout
+resultDifficultyButtons.forEach((button) => {
+    button.addEventListener("click", async () => {
+        await gameModes[currentMode]?.onPickDifficulty?.(
+            button.dataset.difficulty
         );
+    });
+});
 
-        const query =
-            guessInput.value;
+closeResultButton.addEventListener("click", async () => {
+    resultModal.classList.add("hidden");
+    await goHome();
+});
 
-
-        searchTimeout =
-            setTimeout(
-                () => {
-
-                    searchSpotifyTracks(
-                        query
-                    );
-
-                },
-                300
-            );
-
-    }
-);
-
-
-guessInput.addEventListener(
-    "keydown",
-    (event) => {
-
-        if (
-            event.key === "Enter"
-        ) {
-
-            makeGuess();
-
-        }
-
-    }
-);
-
-
-document.addEventListener(
-    "click",
-    (event) => {
-
-        if (
-            !event.target.closest(
-                ".guess-search"
-            )
-        ) {
-
-            searchResults.classList.add(
-                "hidden"
-            );
-
-        }
-
-    }
-);
-
-adminButton.addEventListener(
-    "click",
-    openAdmin
-);
-
-closeAdminButton.addEventListener(
-    "click",
-    closeAdmin
-);
-
-adminModal.addEventListener(
-    "click",
-    (event) => {
-
-        if (
-            event.target ===
-            adminModal
-        ) {
-
-            closeAdmin();
-
-        }
-
-    }
-);
-
-artistSearchButton.addEventListener(
-    "click",
-    searchArtists
-);
-
-artistSearchInput.addEventListener(
-    "keydown",
-    (event) => {
-
-        if (
-            event.key === "Enter"
-        ) {
-
-            searchArtists();
-
-        }
-
-    }
-);
-
-addTracksButton.addEventListener(
-    "click",
-    saveAdminTracks
-);
-
-difficultyOptions.forEach(
-    (button) => {
-
-        button.addEventListener(
-            "click",
-            () => {
-
-                setDifficulty(
-                    button.dataset.difficulty
-                );
-
-            }
-        );
-
-    }
-);
-
-nextRoundButton.addEventListener(
-    "click",
-    async () => {
-
-        const nextDifficulty =
-            getNextDifficulty();
-
-        await startNewRound(
-            nextDifficulty
-        );
-
-    }
-);
-
-resultDifficultyButtons.forEach(
-    (button) => {
-
-        button.addEventListener(
-            "click",
-            async () => {
-
-                const difficultyKey =
-                    button.dataset.difficulty;
-
-                await startNewRound(
-                    difficultyKey
-                );
-
-            }
-        );
-
-    }
-);
-
-closeResultButton.addEventListener(
-    "click",
-    () => {
-
-        resultModal.classList.add(
-            "hidden"
-        );
-
-    }
-);
-
-addTracksButton.addEventListener(
-    "click",
-    saveAdminTracks
-);
-
-closeArtistButton.addEventListener(
-    "click",
-    () => {
-
-        albumBrowser.classList.add(
-            "hidden"
-        );
-
-        artistResults.innerHTML =
-            "";
-
-        artistSearchInput.focus();
-
-    }
-);
 
 // =====================================================
-// Subir canciones
+// CARGAR CANCIONES
 // =====================================================
+
 async function loadSongs() {
-
     try {
-
-        const response =
-            await fetch(
-                "/api/songs"
-            );
+        const response = await fetch("/api/songs");
 
         if (!response.ok) {
-
-            throw new Error(
-                "No se pudieron cargar las canciones."
-            );
+            throw new Error("No se pudieron cargar las canciones.");
         }
 
-        songs =
-            await response.json();
+        songs = await response.json();
 
-        console.log(
-            `Songless: ${songs.length} canciones cargadas.`
-        );
-
+        console.log(`Songless: ${songs.length} canciones cargadas.`);
     } catch (error) {
-
-        console.error(
-            "Error cargando songs.json:",
-            error
-        );
-
+        console.error("Error cargando canciones:", error);
         songs = [];
     }
 }
 
-function renderAdminTracks() {
-
-    trackList.innerHTML =
-        "";
-
-
-    adminTracks.forEach(
-        (track) => {
-
-            const item =
-                document.createElement(
-                    "label"
-                );
-
-            item.className =
-                "track-item";
-
-
-            const checked =
-                adminSelectedTrackIds.has(
-                    track.spotifyId
-                );
-
-
-            item.innerHTML = `
-
-                <input
-                    type="checkbox"
-                    class="track-checkbox"
-                    ${
-                        checked
-                            ? "checked"
-                            : ""
-                    }
-                >
-
-                ${
-                    track.albumImage
-                        ? `
-                        <img
-                            class="track-image"
-                            src="${track.albumImage}"
-                            alt=""
-                        >
-                        `
-                        : ""
-                }
-
-                <div class="track-info">
-
-                    <span class="track-title">
-                        ${escapeHtml(
-                            track.title
-                        )}
-                    </span>
-
-                    <span class="track-meta">
-                        ${escapeHtml(
-                            track.artist
-                        )}
-                        ·
-                        ${escapeHtml(
-                            track.album
-                        )}
-                    </span>
-
-                </div>
-            `;
-
-
-            const checkbox =
-                item.querySelector(
-                    ".track-checkbox"
-                );
-
-
-            checkbox.addEventListener(
-                "change",
-                () => {
-
-                    if (
-                        checkbox.checked
-                    ) {
-
-                        adminSelectedTrackIds.add(
-                            track.spotifyId
-                        );
-
-                    } else {
-
-                        adminSelectedTrackIds.delete(
-                            track.spotifyId
-                        );
-
-                    }
-
-
-                    updateAdminSelection();
-
-                }
-            );
-
-
-            trackList.appendChild(
-                item
-            );
-
-        }
-    );
-
-
-    updateAdminSelection();
-
-}
-
-
-
-function updateAdminSelection() {
-
-    const count =
-        adminSelectedTrackIds.size;
-
-
-    addTracksButton.disabled =
-        count === 0;
-
-
-    addTracksButton.textContent =
-        count === 0
-            ? "AÑADIR CANCIONES"
-            : `AÑADIR ${count} CANCIONES`;
-
-
-    selectAllTracksButton.textContent =
-        count === adminTracks.length
-            ? "Deseleccionar todas"
-            : "Seleccionar todas";
-
-}
-
-async function saveAdminTracks() {
-
-    const tracks =
-        [...adminSelectedSongs.values()];
-
-
-    if (!tracks.length) {
-        return;
-    }
-
-
-    addTracksButton.disabled =
-        true;
-
-    addTracksButton.textContent =
-        "GUARDANDO...";
-
-
-    try {
-
-        const response =
-            await fetch(
-                "/api/admin/songs",
-                {
-                    method: "POST",
-
-                    headers: {
-                        "Content-Type":
-                            "application/json",
-
-                        Authorization:
-                            `Bearer ${getAccessToken()}`
-                    },
-
-                    body: JSON.stringify({
-                        songs:
-                            tracks
-                    })
-                }
-            );
-
-
-        if (!response.ok) {
-
-            throw new Error(
-                await response.text()
-            );
-
-        }
-
-
-        const data =
-            await response.json();
-
-
-        await loadSongs();
-
-
-        adminSelectedSongs =
-            new Map();
-
-
-        updateSelectedSongs();
-
-
-        adminMessage.textContent =
-            `✅ ${data.added} canciones añadidas.` +
-            (
-                data.skipped
-                    ? ` ${data.skipped} ya estaban en Songless.`
-                    : ""
-            );
-
-
-    } catch (error) {
-
-        console.error(
-            error
-        );
-
-        adminMessage.textContent =
-            "No se pudieron guardar las canciones.";
-
-    } finally {
-
-        updateSelectedSongs();
-
-    }
-
-}
 
 // =====================================================
-// Añadir Artistas
+// ADMINISTRACIÓN
 // =====================================================
+
+function openAdmin() {
+    adminModal.classList.remove("hidden");
+    artistSearchInput.focus();
+}
+
+function closeAdmin() {
+    adminModal.classList.add("hidden");
+}
+
+adminButton.addEventListener("click", openAdmin);
+closeAdminButton.addEventListener("click", closeAdmin);
+
+adminModal.addEventListener("click", (event) => {
+    if (event.target === adminModal) closeAdmin();
+});
+
+artistSearchButton.addEventListener("click", searchArtists);
+
+artistSearchInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") searchArtists();
+});
+
+addTracksButton.addEventListener("click", saveAdminTracks);
+
+closeArtistButton.addEventListener("click", () => {
+    albumBrowser.classList.add("hidden");
+    artistResults.innerHTML = "";
+    artistSearchInput.focus();
+});
+
+function adminHeaders() {
+    return { Authorization: `Bearer ${getAccessToken()}` };
+}
 
 async function searchArtists() {
+    const query = artistSearchInput.value.trim();
 
-    const query =
-        artistSearchInput
-            .value
-            .trim();
+    if (query.length < 2) return;
 
-    if (query.length < 2) {
-
-        return;
-
-    }
-
-    adminMessage.textContent =
-        "Buscando artistas...";
-
-    artistResults.innerHTML =
-        "";
+    adminMessage.textContent = "Buscando artistas...";
+    artistResults.innerHTML = "";
 
     try {
-
-        const response =
-            await fetch(
-                `/api/admin/search-artists?q=${encodeURIComponent(query)}`,
-                {
-                    headers: {
-                        Authorization:
-                            `Bearer ${getAccessToken()}`
-                    }
-                }
-            );
-
-
-        if (!response.ok) {
-
-            throw new Error(
-                await response.text()
-            );
-
-        }
-
-
-        const data =
-            await response.json();
-
-
-        renderArtistResults(
-            data.artists
+        const response = await fetch(
+            `/api/admin/search-artists?q=${encodeURIComponent(query)}`,
+            { headers: adminHeaders() }
         );
 
+        if (!response.ok) throw new Error(await response.text());
 
-        adminMessage.textContent =
-            "";
+        const data = await response.json();
 
+        renderArtistResults(data.artists);
+
+        adminMessage.textContent = "";
     } catch (error) {
-
         console.error(error);
-
-        adminMessage.textContent =
-            "No se pudieron buscar artistas.";
-
+        adminMessage.textContent = "No se pudieron buscar artistas.";
     }
-
 }
 
-function renderArtistResults(
-    artists
-) {
+function renderArtistResults(artists) {
+    artistResults.innerHTML = "";
 
-    artistResults.innerHTML =
-        "";
+    artists.forEach((artist) => {
+        const button = document.createElement("button");
+        button.className = "artist-result";
 
-    artists.forEach(
-        (artist) => {
+        const image = artist.images?.[2]?.url || artist.images?.[0]?.url || "";
 
-            const button =
-                document.createElement(
-                    "button"
-                );
+        button.innerHTML = `
+            ${
+                image
+                    ? `<img class="artist-result-image" src="${escapeHtml(image)}" alt="">`
+                    : ""
+            }
+            <span class="artist-result-name">${escapeHtml(artist.name)}</span>
+        `;
 
-            button.className =
-                "artist-result";
+        button.addEventListener("click", () => loadArtistAlbums(artist));
 
-
-            const image =
-                artist.images?.[2]?.url ||
-                artist.images?.[0]?.url ||
-                "";
-
-
-            button.innerHTML = `
-
-                ${
-                    image
-                        ? `
-                        <img
-                            class="artist-result-image"
-                            src="${image}"
-                            alt=""
-                        >
-                        `
-                        : ""
-                }
-
-                <span class="artist-result-name">
-                    ${escapeHtml(
-                        artist.name
-                    )}
-                </span>
-
-            `;
-
-
-            button.addEventListener(
-                "click",
-                () => {
-
-                    loadArtistAlbums(
-                        artist
-                    );
-
-                }
-            );
-
-
-            artistResults.appendChild(
-                button
-            );
-
-        }
-    );
+        artistResults.appendChild(button);
+    });
 }
-// =====================================================
-// Albumes
-// =====================================================
 
-async function loadArtistAlbums(
-    artist
-) {
-
-    selectedAdminArtist =
-        artist;
-
+async function loadArtistAlbums(artist) {
+    selectedAdminArtist = artist;
     adminAlbums = [];
-
-    adminSelectedSongs =
-        new Map();
-
+    adminSelectedSongs = new Map();
     loadedAlbumTracks.clear();
 
+    artistResults.innerHTML = "";
+    albumList.innerHTML = "";
+    albumBrowser.classList.remove("hidden");
 
-    artistResults.innerHTML =
-        "";
-
-    albumList.innerHTML =
-        "";
-
-    albumBrowser.classList.remove(
-        "hidden"
-    );
-
-
-    selectedArtistName.textContent =
-        artist.name;
-
-    albumCount.textContent =
-        "Cargando álbumes...";
-
+    selectedArtistName.textContent = artist.name;
+    albumCount.textContent = "Cargando álbumes...";
 
     try {
+        const response = await fetch(
+            `/api/admin/artists/${encodeURIComponent(artist.id)}/albums`,
+            { headers: adminHeaders() }
+        );
 
-        const response =
-            await fetch(
-                `/api/admin/artists/${encodeURIComponent(
-                    artist.id
-                )}/albums`,
-                {
-                    headers: {
-                        Authorization:
-                            `Bearer ${getAccessToken()}`
-                    }
-                }
-            );
+        if (!response.ok) throw new Error(await response.text());
 
+        const data = await response.json();
 
-        if (!response.ok) {
+        adminAlbums = data.albums || [];
 
-            throw new Error(
-                await response.text()
-            );
-
-        }
-
-
-        const data =
-            await response.json();
-
-
-        adminAlbums =
-            data.albums || [];
-
-
-        albumCount.textContent =
-            `${adminAlbums.length} álbumes`;
-
+        albumCount.textContent = `${adminAlbums.length} álbumes`;
 
         renderAlbums();
 
-
-        adminMessage.textContent =
-            "Abre un álbum para ver sus canciones.";
-
-
+        adminMessage.textContent = "Abre un álbum para ver sus canciones.";
     } catch (error) {
-
-        console.error(
-            error
-        );
-
-        albumCount.textContent =
-            "Error";
-
-        adminMessage.textContent =
-            "No se pudieron cargar los álbumes.";
-
+        console.error(error);
+        albumCount.textContent = "Error";
+        adminMessage.textContent = "No se pudieron cargar los álbumes.";
     }
-
 }
 
 function renderAlbums() {
-
     albumList.innerHTML = "";
 
     adminAlbums.forEach((album) => {
-
-        const card =
-            document.createElement("div");
-
+        const card = document.createElement("div");
         card.className = "album-card";
 
+        const header = document.createElement("div");
+        header.className = "album-card-header";
+        header.setAttribute("role", "button");
+        header.setAttribute("tabindex", "0");
 
-        const header =
-            document.createElement("div");
+        const imageHtml = album.image
+            ? `<img class="album-cover" src="${escapeHtml(album.image)}" alt="${escapeHtml(album.name || "Álbum")}">`
+            : `<div class="album-cover album-cover-empty">♪</div>`;
 
-        header.className =
-            "album-card-header";
-
-        header.setAttribute(
-            "role",
-            "button"
-        );
-
-        header.setAttribute(
-            "tabindex",
-            "0"
-        );
-
-
-        const imageHtml =
-            album.image
-                ? `
-                    <img
-                        class="album-cover"
-                        src="${escapeHtml(album.image)}"
-                        alt="${escapeHtml(
-                            album.name || "Álbum"
-                        )}"
-                    >
-                `
-                : `
-                    <div class="album-cover album-cover-empty">
-                        ♪
-                    </div>
-                `;
-
-
-        const artistName =
-            selectedAdminArtist?.name ||
-            "Artista";
-
-
-        const trackCount =
-            Number(album.totalTracks) || 0;
-
-
-        const year =
-            album.releaseDate
-                ? String(
-                    album.releaseDate
-                ).substring(0, 4)
-                : "";
-
-
-        const albumType =
-            album.albumType === "single"
-                ? "SINGLE"
-                : "ÁLBUM";
-
+        const artistName = selectedAdminArtist?.name || "Artista";
+        const trackCount = Number(album.totalTracks) || 0;
+        const year = album.releaseDate
+            ? String(album.releaseDate).substring(0, 4)
+            : "";
+        const albumType = album.albumType === "single" ? "SINGLE" : "ÁLBUM";
 
         header.innerHTML = `
-            <div class="album-cover-wrapper">
-                ${imageHtml}
-            </div>
-
+            <div class="album-cover-wrapper">${imageHtml}</div>
             <div class="album-info">
-
-                <div class="album-title">
-                    ${escapeHtml(
-                        album.name || "Álbum sin nombre"
-                    )}
-                </div>
-
+                <div class="album-title">${escapeHtml(album.name || "Álbum sin nombre")}</div>
                 <div class="album-meta">
-                    ${escapeHtml(artistName)}
-                    ·
-                    ${trackCount}
-                    ${
-                        trackCount === 1
-                            ? " canción"
-                            : " canciones"
-                    }
-                    ${
-                        year
-                            ? ` · ${escapeHtml(year)}`
-                            : ""
-                    }
+                    ${escapeHtml(artistName)} · ${trackCount}
+                    ${trackCount === 1 ? "canción" : "canciones"}
+                    ${year ? ` · ${escapeHtml(year)}` : ""}
                 </div>
-
-                <div class="album-type">
-                    ${albumType}
-                </div>
-
+                <div class="album-type">${albumType}</div>
             </div>
-
-            <div class="album-arrow">
-                →
-            </div>
+            <div class="album-arrow">→</div>
         `;
 
+        const tracksContainer = document.createElement("div");
+        tracksContainer.className = "album-tracks";
 
-        const tracksContainer =
-            document.createElement("div");
+        const openAlbum = () => toggleAlbum(album, card, tracksContainer);
 
-        tracksContainer.className =
-            "album-tracks";
+        header.addEventListener("click", openAlbum);
 
-
-        const openAlbum = () => {
-
-            toggleAlbum(
-                album,
-                card,
-                tracksContainer
-            );
-
-        };
-
-
-        header.addEventListener(
-            "click",
-            openAlbum
-        );
-
-
-        header.addEventListener(
-            "keydown",
-            (event) => {
-
-                if (
-                    event.key === "Enter" ||
-                    event.key === " "
-                ) {
-
-                    event.preventDefault();
-
-                    openAlbum();
-
-                }
-
+        header.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                openAlbum();
             }
-        );
-
+        });
 
         card.appendChild(header);
-
-        card.appendChild(
-            tracksContainer
-        );
-
+        card.appendChild(tracksContainer);
         albumList.appendChild(card);
-
     });
-
 }
 
-async function toggleAlbum(
-    album,
-    card,
-    tracksContainer
-) {
-
-    const isOpen =
-        card.classList.contains("open");
-
-
-    // =========================================
-    // CERRAR
-    // =========================================
-
-    if (isOpen) {
-
+async function toggleAlbum(album, card, tracksContainer) {
+    if (card.classList.contains("open")) {
         card.classList.remove("open");
-
-       
-
         return;
     }
-
-
-    // =========================================
-    // ABRIR
-    // =========================================
 
     card.classList.add("open");
 
-   
+    if (loadedAlbumTracks.has(album.id)) return;
 
-
-    // =========================================
-    // SI YA ESTABA CARGADO
-    // =========================================
-
-    if (
-        loadedAlbumTracks.has(album.id)
-    ) {
-
-        return;
-    }
-
-
-    // =========================================
-    // LOADING
-    // =========================================
-
-    tracksContainer.innerHTML = `
-        <div class="album-loading">
-            Cargando canciones...
-        </div>
-    `;
-
+    tracksContainer.innerHTML =
+        `<div class="album-loading">Cargando canciones...</div>`;
 
     try {
-
-        const token =
-            getAccessToken();
-
-        if (!token) {
-
-            throw new Error(
-                "No hay sesión de Spotify."
-            );
-
+        if (!getAccessToken()) {
+            throw new Error("No hay sesión de Spotify.");
         }
 
-
-        const response =
-            await fetch(
-                `/api/admin/albums/${encodeURIComponent(
-                    album.id
-                )}/tracks`,
-                {
-                    headers: {
-                        Authorization:
-                            `Bearer ${token}`
-                    }
-                }
-            );
-
-
-        if (!response.ok) {
-
-            throw new Error(
-                await response.text()
-            );
-
-        }
-
-
-        const data =
-            await response.json();
-
-
-        const tracks =
-            Array.isArray(data.tracks)
-                ? data.tracks
-                : [];
-
-
-        console.log(
-            `Renderizando ${tracks.length} canciones`
+        const response = await fetch(
+            `/api/admin/albums/${encodeURIComponent(album.id)}/tracks`,
+            { headers: adminHeaders() }
         );
 
+        if (!response.ok) throw new Error(await response.text());
 
-        renderAlbumTracks(
-            album,
-            tracks,
-            tracksContainer
-        );
+        const data = await response.json();
 
+        const tracks = Array.isArray(data.tracks) ? data.tracks : [];
 
-        // Volvemos a forzar la visibilidad
-        // después de renderizar.
-      
+        renderAlbumTracks(album, tracks, tracksContainer);
 
-        loadedAlbumTracks.add(
-            album.id
-        );
-
-
+        loadedAlbumTracks.add(album.id);
     } catch (error) {
+        console.error("Error cargando canciones:", error);
 
-        console.error(
-            "Error cargando canciones:",
-            error
-        );
-
-
-      
-
-
-        tracksContainer.innerHTML = `
-            <div class="album-loading">
-                No se pudieron cargar las canciones.
-            </div>
-        `;
-
+        tracksContainer.innerHTML =
+            `<div class="album-loading">No se pudieron cargar las canciones.</div>`;
     }
-
 }
 
-function renderAlbumTracks(
-    album,
-    tracks,
-    container
-) {
-
+function renderAlbumTracks(album, tracks, container) {
     container.innerHTML = "";
 
-
-    // ================================
-    // SIN CANCIONES
-    // ================================
-
     if (!tracks.length) {
-
-        container.innerHTML = `
-            <div class="album-loading">
-                Spotify no ha devuelto canciones para este álbum.
-            </div>
-        `;
-
+        container.innerHTML =
+            `<div class="album-loading">Spotify no ha devuelto canciones para este álbum.</div>`;
         return;
     }
 
+    tracks.forEach((track) => {
+        const row = document.createElement("label");
+        row.className = "album-track";
 
-    // ================================
-    // CANCIONES
-    // ================================
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.className = "album-track-checkbox";
+        checkbox.checked = adminSelectedSongs.has(track.spotifyId);
 
-    tracks.forEach(
-        (track) => {
+        const info = document.createElement("div");
+        info.className = "album-track-info";
 
-            const row =
-                document.createElement(
-                    "label"
-                );
+        const title = document.createElement("span");
+        title.className = "album-track-title";
+        title.textContent = track.title || "Canción sin título";
 
-            row.className =
-                "album-track";
+        const artist = document.createElement("span");
+        artist.className = "album-track-artist";
+        artist.textContent = track.artist || selectedAdminArtist?.name || "";
 
+        info.appendChild(title);
+        info.appendChild(artist);
 
-            const checkbox =
-                document.createElement(
-                    "input"
-                );
+        checkbox.addEventListener("change", () => {
+            if (checkbox.checked) {
+                adminSelectedSongs.set(track.spotifyId, {
+                    ...track,
+                    albumImage: album.image
+                });
+            } else {
+                adminSelectedSongs.delete(track.spotifyId);
+            }
 
-            checkbox.type =
-                "checkbox";
+            updateSelectedSongs();
+        });
 
-            checkbox.className =
-                "album-track-checkbox";
-
-
-            checkbox.checked =
-                adminSelectedSongs.has(
-                    track.spotifyId
-                );
-
-
-            const info =
-                document.createElement(
-                    "div"
-                );
-
-            info.className =
-                "album-track-info";
-
-
-            const title =
-                document.createElement(
-                    "span"
-                );
-
-            title.className =
-                "album-track-title";
-
-            title.textContent =
-                track.title ||
-                "Canción sin título";
-
-
-            const artist =
-                document.createElement(
-                    "span"
-                );
-
-            artist.className =
-                "album-track-artist";
-
-            artist.textContent =
-                track.artist ||
-                selectedAdminArtist?.name ||
-                "";
-
-
-            info.appendChild(
-                title
-            );
-
-            info.appendChild(
-                artist
-            );
-
-
-            checkbox.addEventListener(
-                "change",
-                () => {
-
-                    if (
-                        checkbox.checked
-                    ) {
-
-                        adminSelectedSongs.set(
-                            track.spotifyId,
-                            {
-                                ...track,
-
-                                albumImage:
-                                    album.image
-                            }
-                        );
-
-                    } else {
-
-                        adminSelectedSongs.delete(
-                            track.spotifyId
-                        );
-
-                    }
-
-
-                    updateSelectedSongs();
-
-                }
-            );
-
-
-            row.appendChild(
-                checkbox
-            );
-
-            row.appendChild(
-                info
-            );
-
-
-            container.appendChild(
-                row
-            );
-
-        }
-    );
-
+        row.appendChild(checkbox);
+        row.appendChild(info);
+        container.appendChild(row);
+    });
 }
 
 function updateSelectedSongs() {
+    const count = adminSelectedSongs.size;
 
-    const count =
-        adminSelectedSongs.size;
-
+    addTracksButton.disabled = count === 0;
 
     if (count === 0) {
-
-        selectedSongsBar.classList.add(
-            "hidden"
-        );
-
+        selectedSongsBar.classList.add("hidden");
         return;
-
     }
 
-
-    selectedSongsBar.classList.remove(
-        "hidden"
-    );
-
+    selectedSongsBar.classList.remove("hidden");
 
     selectedSongsText.textContent =
-        count === 1
-            ? "1 canción seleccionada"
-            : `${count} canciones seleccionadas`;
-
+        count === 1 ? "1 canción seleccionada" : `${count} canciones seleccionadas`;
 
     addTracksButton.textContent =
-        count === 1
-            ? "AÑADIR 1 CANCIÓN"
-            : `AÑADIR ${count} CANCIONES`;
-
+        count === 1 ? "AÑADIR 1 CANCIÓN" : `AÑADIR ${count} CANCIONES`;
 }
+
+async function saveAdminTracks() {
+    const tracks = [...adminSelectedSongs.values()];
+
+    if (!tracks.length) return;
+
+    addTracksButton.disabled = true;
+    addTracksButton.textContent = "GUARDANDO...";
+
+    try {
+        const response = await fetch("/api/admin/songs", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                ...adminHeaders()
+            },
+            body: JSON.stringify({ songs: tracks })
+        });
+
+        if (!response.ok) throw new Error(await response.text());
+
+        const data = await response.json();
+
+        await loadSongs();
+
+        adminSelectedSongs = new Map();
+
+        // Desmarca las casillas de los álbumes ya abiertos.
+        document
+            .querySelectorAll(".album-track-checkbox")
+            .forEach((checkbox) => { checkbox.checked = false; });
+
+        adminMessage.textContent =
+            `✅ ${data.added} canciones añadidas.` +
+            (data.skipped ? ` ${data.skipped} ya estaban en Songless.` : "");
+    } catch (error) {
+        console.error(error);
+        adminMessage.textContent = "No se pudieron guardar las canciones.";
+    } finally {
+        updateSelectedSongs();
+    }
+}
+
 
 // =====================================================
 // INICIO
 // =====================================================
 
 async function init() {
-
     await handleSpotifyCallback();
-
     await showSpotifyUser();
-
     await loadSongs();
 
     if (getAccessToken()) {
-
         try {
-
             await waitForSpotifySDK();
-
             await initializeSpotifyPlayer();
-
         } catch (error) {
-
-            console.error(
-                "Error inicializando Spotify:",
-                error
-            );
-
+            console.error("Error inicializando Spotify:", error);
         }
-
     }
-
 }
 
-
-init();
+// Se ejecuta cuando ya se han cargado daily.js e infinite.js.
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+} else {
+    init();
+}
