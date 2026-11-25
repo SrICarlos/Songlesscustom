@@ -1,5 +1,4 @@
 
-
 // =====================================================
 // CONFIGURACIÓN
 // =====================================================
@@ -22,8 +21,17 @@ const ATTEMPT_DURATIONS = [1, 2, 3, 5, 10];
 const DIFFICULTY_ORDER = ["easy", "medium", "hard", "impossible"];
 
 
+// =====================================================
+// MODOS DE JUEGO
+// =====================================================
 
-const gameModes = {};
+import { dailyMode } from "./daily.js";
+import { infiniteMode } from "./infinite.js";
+
+const gameModes = {
+    daily: dailyMode,
+    infinite: infiniteMode
+};
 
 
 // =====================================================
@@ -1279,6 +1287,35 @@ async function saveAdminTracks() {
         updateSelectedSongs();
     }
 }
+
+
+// =====================================================
+// EXPORTS (lo que usan daily.js e infinite.js)
+// Las variables `let` se exportan como enlaces "vivos": los otros
+// archivos siempre leen su valor actual, pero no pueden asignarlas.
+// =====================================================
+
+export {
+    DIFFICULTY_ORDER,
+    getSongsByDifficulty,
+    getDifficultyLabel,
+    getRandomSong,
+    setDifficulty,
+    generateRandomFragmentStart,
+    prepareRound,
+    goHome,
+    currentAttempt,
+    currentDifficulty,
+    selectedDifficulty,
+    result,
+    resultModal,
+    resultModalTitle,
+    resultSongImage,
+    resultSongTitle,
+    resultSongArtist,
+    resultDifficultyButtons,
+    nextRoundButton
+};
 
 
 // =====================================================

@@ -1,13 +1,16 @@
-// =====================================================
-// infinite.js — Modo INFINITO
-//
-// Rondas aleatorias sin límite. Empieza con la dificultad elegida en la
-// pantalla principal y, al terminar cada ronda, el botón "siguiente" sube
-// a la dificultad siguiente (tras "impossible" vuelve a "easy"). También
-// se puede elegir la dificultad a mano desde el modal de resultado.
-//
-// Depende de app.js (se carga después de él).
-// =====================================================
+
+import {
+    DIFFICULTY_ORDER,
+    getRandomSong,
+    getDifficultyLabel,
+    generateRandomFragmentStart,
+    setDifficulty,
+    prepareRound,
+    currentDifficulty,
+    selectedDifficulty,
+    result,
+    nextRoundButton
+} from "./app.js";
 
 let infiniteRound = 1;
 
@@ -23,7 +26,7 @@ function getNextDifficulty() {
 }
 
 async function startInfiniteRound(difficultyKey) {
-    selectedDifficulty = difficultyKey;
+    // setDifficulty actualiza selectedDifficulty dentro de app.js.
     setDifficulty(difficultyKey);
 
     let song;
@@ -46,7 +49,8 @@ async function startInfiniteRound(difficultyKey) {
 }
 
 
-gameModes.infinite = {
+// Definición del modo (app.js lo registra en gameModes).
+export const infiniteMode = {
     async start() {
         infiniteRound = 1;
         await startInfiniteRound(selectedDifficulty);

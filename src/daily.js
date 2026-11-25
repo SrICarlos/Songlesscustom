@@ -1,14 +1,20 @@
-// =====================================================
-// daily.js — Modo DIARIO
-//
-// Un set fijo por día (una canción por dificultad, de fácil a imposible)
-// que cambia a las 00:00. No necesita servidor: las canciones se eligen
-// con un generador aleatorio con semilla basada en la fecha, así que la
-// misma fecha da siempre el mismo set. El progreso se guarda en
-// localStorage y se reinicia solo al cambiar de día.
-//
-// Depende de app.js (se carga después de él).
-// =====================================================
+import {
+    DIFFICULTY_ORDER,
+    getSongsByDifficulty,
+    getDifficultyLabel,
+    generateRandomFragmentStart,
+    prepareRound,
+    goHome,
+    currentAttempt,
+    currentDifficulty,
+    resultModal,
+    resultModalTitle,
+    resultSongImage,
+    resultSongTitle,
+    resultSongArtist,
+    resultDifficultyButtons,
+    nextRoundButton
+} from "./app.js";
 
 const DAILY_STORAGE_KEY = "songless_daily";
 
@@ -20,9 +26,6 @@ let dailySummaryShown = false;
 // Fecha y aleatoriedad con semilla
 // -----------------------------------------------------
 
-// Fecha local: cambia a las 00:00 de la hora del dispositivo.
-// Para que cambie a las 00:00 UTC para todo el mundo, sustituye el
-// cuerpo por:  return new Date().toISOString().slice(0, 10);
 function getTodayKey() {
     const d = new Date();
     const month = String(d.getMonth() + 1).padStart(2, "0");
@@ -186,10 +189,10 @@ function showDailyFinished(progress, set) {
 
 
 // -----------------------------------------------------
-// Registro en el núcleo
+// Definición del modo (app.js lo registra en gameModes)
 // -----------------------------------------------------
 
-gameModes.daily = {
+export const dailyMode = {
     async start() {
         await startDailyRound();
     },
