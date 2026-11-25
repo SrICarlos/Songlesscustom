@@ -1398,6 +1398,9 @@ button {
 
     text-align: center;
 
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+
     animation:
         result-modal-in 0.25s ease;
 }
@@ -1455,7 +1458,7 @@ button {
 
     gap: 15px;
 
-    margin: 30px 0;
+    margin: 30px 0 12px;
 
     padding: 14px;
 
@@ -2206,35 +2209,363 @@ button {
         color 0.2s ease !important;
 }
 
-.result-preview-button, .result-link {
-  
-    display: block; width: 100%; margin-top: 12px; padding: 12px;
-    
-    border-radius: 10px; text-align: center; font-weight: 700;
-    
-    text-decoration: none; cursor: pointer; color: inherit;
-    
-    background: transparent; border: 1px solid rgba(255,255,255,.2);
+
+/* =====================================
+   VOLUMEN
+===================================== */
+
+.volume-control {
+    display: flex;
+    align-items: center;
+
+    gap: 10px;
 }
 
-.result-links { 
-    
-    display: flex; 
-    gap: 10px; 
-    margin-top: 12px; 
+.volume-mute {
+    width: 28px;
+    height: 28px;
 
+    flex: 0 0 28px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border: none;
+    border-radius: 50%;
+
+    background: transparent;
+    color: var(--muted);
+
+    transition:
+        background 0.2s ease,
+        color 0.2s ease;
 }
 
-.result-links .result-link { 
-    
-    margin-top: 0; 
-
+.volume-mute:hover {
+    background: var(--surface);
+    color: var(--text);
 }
 
-.result-links.hidden, .result-preview-button.hidden {
+.volume-mute svg {
+    width: 17px;
+    height: 17px;
+}
 
-    display: none; 
+/* Ondas del icono según el nivel (0 = silencio, 1 = bajo, 2 = alto) */
 
+.volume-mute .wave {
+    display: none;
+}
+
+.volume-mute[data-level="0"] .wave-mute,
+.volume-mute[data-level="1"] .wave-1,
+.volume-mute[data-level="2"] .wave-1,
+.volume-mute[data-level="2"] .wave-2 {
+    display: inline;
+}
+
+.volume-slider {
+    -webkit-appearance: none;
+    appearance: none;
+
+    flex: 1;
+    min-width: 0;
+
+    height: 18px;
+
+    margin: 0;
+
+    outline: none;
+
+    background: transparent;
+
+    cursor: pointer;
+}
+
+.volume-slider::-webkit-slider-runnable-track {
+    height: 5px;
+
+    border-radius: 999px;
+
+    background:
+        linear-gradient(
+            to right,
+            var(--accent) var(--value, 50%),
+            #272727 var(--value, 50%)
+        );
+}
+
+.volume-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+
+    width: 14px;
+    height: 14px;
+
+    margin-top: -4.5px;
+
+    border: none;
+    border-radius: 50%;
+
+    background: var(--text);
+
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+
+    transition: transform 0.15s ease;
+}
+
+.volume-slider::-moz-range-track {
+    height: 5px;
+
+    border-radius: 999px;
+
+    background: #272727;
+}
+
+.volume-slider::-moz-range-progress {
+    height: 5px;
+
+    border-radius: 999px;
+
+    background: var(--accent);
+}
+
+.volume-slider::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+
+    border: none;
+    border-radius: 50%;
+
+    background: var(--text);
+
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.volume-slider:hover::-webkit-slider-thumb,
+.volume-slider:focus-visible::-webkit-slider-thumb {
+    transform: scale(1.25);
+}
+
+/* En la pantalla de juego: centrado bajo el tiempo del fragmento */
+
+.volume-control-game {
+    width: min(220px, 100%);
+
+    margin: 24px auto 0;
 }
 
 
+/* =====================================
+   PREVIEW (MODAL DE RESULTADO)
+===================================== */
+
+.result-player {
+    display: flex;
+    flex-direction: column;
+
+    gap: 12px;
+
+    margin-bottom: 14px;
+
+    padding: 14px;
+
+    border: 1px solid var(--border);
+    border-radius: 13px;
+
+    background: #131313;
+
+    text-align: left;
+}
+
+.player-label {
+    color: #555;
+
+    font-size: 0.62rem;
+    font-weight: 800;
+
+    letter-spacing: 0.13em;
+}
+
+.preview-row {
+    display: flex;
+    align-items: center;
+
+    gap: 14px;
+}
+
+.preview-play {
+    width: 46px;
+    height: 46px;
+
+    flex: 0 0 46px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    padding-left: 2px;
+
+    border: none;
+    border-radius: 50%;
+
+    background: var(--accent);
+    color: #000;
+
+    font-size: 1rem;
+
+    transition:
+        transform 0.2s ease,
+        background 0.2s ease;
+}
+
+.preview-play:hover {
+    transform: scale(1.06);
+
+    background: var(--accent-hover);
+}
+
+.preview-play:active {
+    transform: scale(0.96);
+}
+
+.preview-progress {
+    min-width: 0;
+
+    flex: 1;
+
+    display: flex;
+    flex-direction: column;
+
+    gap: 9px;
+}
+
+.preview-bar {
+    position: relative;
+
+    height: 5px;
+
+    border-radius: 999px;
+
+    background: #272727;
+
+    cursor: pointer;
+}
+
+/* Zona de clic más grande que la barra visible */
+.preview-bar::before {
+    content: "";
+
+    position: absolute;
+
+    inset: -9px 0;
+}
+
+.preview-bar-fill {
+    width: 0;
+    height: 100%;
+
+    border-radius: inherit;
+
+    background: var(--accent);
+
+    transition: width 0.25s linear;
+}
+
+.preview-time {
+    display: flex;
+    justify-content: space-between;
+
+    color: var(--muted);
+
+    font-size: 0.68rem;
+    font-weight: 700;
+
+    letter-spacing: 0.08em;
+
+    font-variant-numeric: tabular-nums;
+}
+
+.result-player .volume-control {
+    padding-top: 12px;
+
+    border-top: 1px solid var(--border);
+}
+
+
+/* =====================================
+   ENLACES (SPOTIFY / YOUTUBE)
+===================================== */
+
+.result-links {
+    display: grid;
+
+    grid-template-columns: 1fr 1fr;
+
+    gap: 8px;
+
+    margin-top: 12px;
+}
+
+.result-link {
+    display: flex;
+
+    align-items: center;
+    justify-content: center;
+
+    gap: 8px;
+
+    padding: 11px;
+
+    border: 1px solid var(--border);
+    border-radius: 9px;
+
+    background: #121212;
+    color: var(--muted);
+
+    font-size: 0.75rem;
+    font-weight: 700;
+
+    text-decoration: none;
+
+    transition:
+        border-color 0.2s ease,
+        color 0.2s ease;
+}
+
+.result-link:hover {
+    border-color: var(--link-color);
+    color: var(--link-color);
+}
+
+.link-dot {
+    width: 7px;
+    height: 7px;
+
+    border-radius: 50%;
+
+    background: var(--link-color);
+}
+
+.result-link-spotify {
+    --link-color: #1ed760;
+}
+
+.result-link-youtube {
+    --link-color: #ff4d4d;
+}
+
+@media (max-width: 700px) {
+
+    .result-player {
+        padding: 12px;
+    }
+
+    .preview-play {
+        width: 42px;
+        height: 42px;
+
+        flex-basis: 42px;
+    }
+
+}

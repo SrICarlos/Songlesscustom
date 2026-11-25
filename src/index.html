@@ -7,9 +7,6 @@
     <title>Songless</title>
 
     <link rel="stylesheet" href="./style.css">
-
-    <!-- Spotify Web Playback SDK -->
-    <!-- <script src="https://sdk.scdn.co/spotify-player.js"></script> -->
 </head>
 
 <body>
@@ -248,6 +245,19 @@
                     >
                         1 segundo
                     </p>
+
+
+                    <div class="volume-control volume-control-game">
+                        <button type="button" class="volume-mute" data-level="2" aria-label="Silenciar">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M11 5 6 9H3v6h3l5 4V5z" fill="currentColor"/>
+                                <path class="wave wave-1" d="M15.5 9a4 4 0 0 1 0 6"/>
+                                <path class="wave wave-2" d="M18.5 6.5a8 8 0 0 1 0 11"/>
+                                <path class="wave wave-mute" d="m16 9 5 6m0-6-5 6"/>
+                            </svg>
+                        </button>
+                        <input type="range" class="volume-slider" min="0" max="100" value="50" aria-label="Volumen">
+                    </div>
 
                 </div>
 
@@ -555,12 +565,92 @@
             </div>
 
 
+            <!-- Preview de 30 segundos -->
+            <div id="resultPlayer" class="result-player">
+
+                <p class="player-label">
+                    PREVIEW · 30 SEGUNDOS
+                </p>
+
+                <div class="preview-row">
+
+                    <button
+                        id="previewPlayButton"
+                        class="preview-play"
+                        type="button"
+                        aria-label="Escuchar preview"
+                    >
+                        <span id="previewPlayIcon">▶</span>
+                    </button>
+
+                    <div class="preview-progress">
+
+                        <div id="previewBar" class="preview-bar">
+                            <div
+                                id="previewBarFill"
+                                class="preview-bar-fill"
+                            ></div>
+                        </div>
+
+                        <div class="preview-time">
+                            <span id="previewCurrentTime">0:00</span>
+                            <span id="previewTotalTime">0:30</span>
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <div class="volume-control">
+                    <button type="button" class="volume-mute" data-level="2" aria-label="Silenciar">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M11 5 6 9H3v6h3l5 4V5z" fill="currentColor"/>
+                            <path class="wave wave-1" d="M15.5 9a4 4 0 0 1 0 6"/>
+                            <path class="wave wave-2" d="M18.5 6.5a8 8 0 0 1 0 11"/>
+                            <path class="wave wave-mute" d="m16 9 5 6m0-6-5 6"/>
+                        </svg>
+                    </button>
+                    <input type="range" class="volume-slider" min="0" max="100" value="50" aria-label="Volumen">
+                </div>
+
+            </div>
+
+
             <button
                 id="nextRoundButton"
                 class="next-round-button"
             >
                 SIGUIENTE
             </button>
+
+
+            <!-- Enlaces para escuchar la canción completa -->
+            <div id="resultLinks" class="result-links">
+
+                <a
+                    id="spotifyLink"
+                    class="result-link result-link-spotify"
+                    href="#"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    <span class="link-dot"></span>
+                    Spotify ↗
+                </a>
+
+                <a
+                    id="youtubeLink"
+                    class="result-link result-link-youtube"
+                    href="#"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    <span class="link-dot"></span>
+                    YouTube ↗
+                </a>
+
+            </div>
+
 
 
             <div class="result-difficulties">
@@ -610,17 +700,7 @@
         </div>
 
     </div>
-    <script>
-    window.onSpotifyWebPlaybackSDKReady = () => {
-        window.spotifySDKReady = true;
 
-        window.dispatchEvent(
-            new Event("spotify-sdk-ready")
-        );
-    };
-</script>
-
-<script src="https://sdk.scdn.co/spotify-player.js"></script>
 <script type="module" src="./app.js"></script>
 
 </body>
