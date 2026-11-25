@@ -5,7 +5,7 @@
 const CLIENT_ID = "93ab9700faa841aa8d2c1f1db1c5c3a7";
 
 const REDIRECT_URI =
-    "http://127.0.0.1:5173/callback";
+    window.location.origin + "/callback";
 
 const SCOPES = [
     "streaming",
