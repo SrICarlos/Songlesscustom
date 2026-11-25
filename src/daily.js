@@ -1,3 +1,15 @@
+// =====================================================
+// daily.js — Modo DIARIO
+//
+// Un set fijo por día (una canción por dificultad, de fácil a imposible)
+// que cambia a las 00:00. No necesita servidor: las canciones se eligen
+// con un generador aleatorio con semilla basada en la fecha, así que la
+// misma fecha da siempre el mismo set. El progreso se guarda en
+// localStorage y se reinicia solo al cambiar de día.
+//
+// Depende de app.js.
+// =====================================================
+
 import {
     DIFFICULTY_ORDER,
     getSongsByDifficulty,
@@ -5,6 +17,7 @@ import {
     generateRandomFragmentStart,
     prepareRound,
     goHome,
+    setResultExtras,
     currentAttempt,
     currentDifficulty,
     resultModal,
@@ -26,6 +39,9 @@ let dailySummaryShown = false;
 // Fecha y aleatoriedad con semilla
 // -----------------------------------------------------
 
+// Fecha local: cambia a las 00:00 de la hora del dispositivo.
+// Para que cambie a las 00:00 UTC para todo el mundo, sustituye el
+// cuerpo por:  return new Date().toISOString().slice(0, 10);
 function getTodayKey() {
     const d = new Date();
     const month = String(d.getMonth() + 1).padStart(2, "0");
@@ -88,7 +104,7 @@ function getDailySet(dateKey) {
 
         set.push({
             song,
-            fragmentStartMs: generateRandomFragmentStart(song.durationMs, rand)
+            fragmentStartMs: generateRandomFragmentStart(rand)
         });
     });
 
@@ -181,6 +197,9 @@ function showDailyFinished(progress, set) {
     resultSongImage.classList.add("hidden");
 
     resultDifficultyButtons.forEach((button) => button.classList.add("hidden"));
+
+    // El resumen no tiene una canción: sin preview ni enlaces.
+    setResultExtras(null);
 
     nextRoundButton.textContent = "VOLVER AL INICIO";
 

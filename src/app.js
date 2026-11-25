@@ -1,15 +1,3 @@
-// =====================================================
-// app.js — Núcleo de Songless
-//   · Configuración, estado y elementos DOM
-//   · Login con Spotify (OAuth PKCE) y SDK de reproducción
-//   · Pantalla principal y selección de modos
-//   · Motor de juego compartido (intentos, búsqueda, acierto)
-//   · Panel de administración
-//
-// Son módulos ES (los que Vite espera). En index.html solo hace falta
-// UN script, que apunta a app.js (este importa daily.js e infinite.js):
-//   <script type="module" src="./app.js"></script>
-// =====================================================
 
 
 // =====================================================
@@ -33,6 +21,9 @@ const ATTEMPT_DURATIONS = [1, 2, 3, 5, 10];
 
 const DIFFICULTY_ORDER = ["easy", "medium", "hard", "impossible"];
 
+// Duración de las previews (iTunes): los fragmentos salen de aquí dentro.
+const PREVIEW_LENGTH_MS = 30000;
+
 
 // =====================================================
 // MODOS DE JUEGO
@@ -48,6 +39,7 @@ const DIFFICULTY_ORDER = ["easy", "medium", "hard", "impossible"];
 
 import { dailyMode } from "./daily.js";
 import { infiniteMode } from "./infinite.js";
+import { getPreviewUrl } from "./preview.js";
 
 const gameModes = {
     daily: dailyMode,
@@ -59,9 +51,13 @@ const gameModes = {
 // ESTADO
 // =====================================================
 
-let spotifyPlayer = null;
-let spotifyDeviceId = null;
-let spotifySDKReady = false;
+// Reproductor de audio (previews de 30 s).
+const audio = new Audio();
+audio.preload = "auto";
+let audioToken = 0;   // invalida reproducciones que quedaron pendientes
+
+// Preview y enlaces del modal de resultado (se crean al primer uso).
+let resultExtras = null;
 
 let songs = [];
 
@@ -303,8 +299,6 @@ async function handleSpotifyCallback() {
         window.history.replaceState({}, document.title, "/");
 
         await showSpotifyUser();
-        await waitForSpotifySDK();
-        await initializeSpotifyPlayer();
     } catch (error) {
         console.error("Error conectando Spotify:", error);
     } finally {
@@ -352,13 +346,7 @@ async function showSpotifyUser() {
 }
 
 function logoutSpotify() {
-    clearFragmentTimer();
-
-    if (spotifyPlayer) {
-        spotifyPlayer.disconnect();
-        spotifyPlayer = null;
-        spotifyDeviceId = null;
-    }
+    stopPlayback();
 
     localStorage.removeItem("spotify_access_token");
     localStorage.removeItem("spotify_refresh_token");
@@ -417,183 +405,172 @@ function setDifficulty(difficultyKey) {
     highlightDifficulty(difficultyKey);
 }
 
-function generateRandomFragmentStart(durationMs, rand = Math.random) {
-    if (!durationMs) {
-        // Canciones guardadas antes de registrar la duración.
-        return Math.floor(rand() * 120000);
-    }
-
-    const maxFragmentDuration =
+// Inicio aleatorio dentro de la preview de 30 s, dejando sitio para el
+// fragmento más largo (el del último intento).
+function generateRandomFragmentStart(rand = Math.random) {
+    const longestFragmentMs =
         ATTEMPT_DURATIONS[ATTEMPT_DURATIONS.length - 1] * 1000;
 
-    const safetyMargin = 1000;
+    const safetyMargin = 500;
 
-    const maximumStart = durationMs - maxFragmentDuration - safetyMargin;
-
-    if (maximumStart <= 0) return 0;
+    const maximumStart = PREVIEW_LENGTH_MS - longestFragmentMs - safetyMargin;
 
     return Math.floor(rand() * maximumStart);
 }
 
 
 // =====================================================
-// SPOTIFY SDK
+// REPRODUCCIÓN (previews de 30 s con <audio>)
 // =====================================================
 
-function waitForSpotifySDK() {
-    return new Promise((resolve) => {
-        if (typeof Spotify !== "undefined" && Spotify.Player) {
-            spotifySDKReady = true;
-            resolve();
-            return;
-        }
+audio.addEventListener("play", () => {
+    isPlaying = true;
+    updatePlayButton();
+});
 
-        if (window.spotifySDKReady) {
-            spotifySDKReady = true;
-            resolve();
-            return;
-        }
+audio.addEventListener("pause", () => {
+    isPlaying = false;
+    updatePlayButton();
+});
 
-        window.addEventListener(
-            "spotify-sdk-ready",
-            () => {
-                spotifySDKReady = true;
-                resolve();
-            },
-            { once: true }
-        );
+audio.addEventListener("ended", () => {
+    isPlaying = false;
+    updatePlayButton();
+});
+
+// URL de la preview de la canción actual (la busca si todavía no la tiene).
+async function ensurePreview() {
+    const song = currentSong;
+
+    if (!song) return null;
+    if (song.previewUrl) return song.previewUrl;
+
+    song.previewUrl = await getPreviewUrl({
+        spotifyId: song.id,
+        title: song.name,
+        artist: song.artists[0].name
     });
+
+    return song.previewUrl;
 }
 
-async function initializeSpotifyPlayer() {
-    const token = getAccessToken();
+// Precarga el audio para que el primer play sea inmediato.
+function preloadPreview() {
+    const song = currentSong;
 
-    if (!token) return;
-    if (spotifyPlayer) return;
+    ensurePreview()
+        .then((url) => {
+            if (!url || song !== currentSong) return;
 
-    await waitForSpotifySDK();
-
-    spotifyPlayer = new Spotify.Player({
-        name: "Songless",
-        getOAuthToken(callback) {
-            callback(getAccessToken());
-        },
-        volume: 0.5
-    });
-
-    spotifyPlayer.addListener("ready", ({ device_id }) => {
-        spotifyDeviceId = device_id;
-        console.log("Songless listo:", device_id);
-    });
-
-    spotifyPlayer.addListener("not_ready", ({ device_id }) => {
-        console.warn("Spotify device no disponible:", device_id);
-
-        if (spotifyDeviceId === device_id) {
-            spotifyDeviceId = null;
-        }
-    });
-
-    spotifyPlayer.addListener("player_state_changed", (state) => {
-        if (!state) return;
-
-        isPlaying = !state.paused;
-        updatePlayButton();
-    });
-
-    spotifyPlayer.addListener("initialization_error", ({ message }) => {
-        console.error("Spotify initialization:", message);
-    });
-
-    spotifyPlayer.addListener("authentication_error", ({ message }) => {
-        console.error("Spotify authentication:", message);
-    });
-
-    spotifyPlayer.addListener("account_error", ({ message }) => {
-        console.error("Spotify account:", message);
-    });
-
-    const connected = await spotifyPlayer.connect();
-
-    console.log("Spotify player conectado:", connected);
+            if (audio.dataset.url !== url) {
+                audio.src = url;
+                audio.dataset.url = url;
+                audio.load();
+            }
+        })
+        .catch(() => {});
 }
 
+// Carga la URL (si cambió), salta a startSec y reproduce.
+async function playAudioFrom(url, startSec) {
+    if (audio.dataset.url !== url) {
+        audio.src = url;
+        audio.dataset.url = url;
+    }
 
-// =====================================================
-// REPRODUCCIÓN
-// =====================================================
+    if (audio.readyState < 1) {
+        await new Promise((resolve, reject) => {
+            audio.addEventListener("loadedmetadata", resolve, { once: true });
+            audio.addEventListener(
+                "error",
+                () => reject(new Error("No se pudo cargar el audio.")),
+                { once: true }
+            );
+        });
+    }
+
+    audio.currentTime = startSec;
+
+    if (audio.seeking) {
+        await new Promise((resolve) => {
+            audio.addEventListener("seeked", resolve, { once: true });
+        });
+    }
+
+    await audio.play();
+}
 
 async function togglePlayback() {
-    if (!spotifyPlayer) {
-        console.warn("El reproductor todavía no está listo.");
-        return;
-    }
-
-    if (!spotifyDeviceId) {
-        console.warn("No hay dispositivo Spotify disponible.");
-        return;
-    }
-
     if (isPlaying) {
-        clearFragmentTimer();
-        await spotifyPlayer.pause();
-        isPlaying = false;
-        updatePlayButton();
+        await stopPlayback();
         return;
     }
 
     await playFragment();
 }
 
+// Reproduce el fragmento del intento actual.
 async function playFragment() {
-    const token = getAccessToken();
+    if (!currentSong) return;
 
-    if (!token || !spotifyDeviceId || !currentSong) return;
-
+    const token = ++audioToken;
     const duration = ATTEMPT_DURATIONS[currentAttempt - 1];
 
     clearFragmentTimer();
 
-    const response = await fetch(
-        `https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(spotifyDeviceId)}`,
-        {
-            method: "PUT",
-            headers: {
-                Authorization: `Bearer ${token}`,
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                uris: [currentSong.uri],
-                position_ms: fragmentStartMs
-            })
+    try {
+        const url = await ensurePreview();
+
+        if (token !== audioToken) return;
+
+        if (!url) {
+            result.textContent = "No se encontró audio para esta canción.";
+            return;
         }
-    );
 
-    if (!response.ok) {
-        console.error("Error reproduciendo:", await response.text());
-        return;
+        await playAudioFrom(url, fragmentStartMs / 1000);
+
+        if (token !== audioToken) return;
+
+        startFragmentTimer(duration);
+    } catch (error) {
+        if (token === audioToken) {
+            console.error("Error reproduciendo:", error);
+        }
     }
+}
 
-    isPlaying = true;
-    updatePlayButton();
+// Reproduce la preview completa (modal de resultado).
+async function playResultPreview() {
+    if (!currentSong) return;
 
-    startFragmentTimer(duration);
+    const token = ++audioToken;
+
+    clearFragmentTimer();
+
+    try {
+        const url = await ensurePreview();
+
+        if (token !== audioToken) return;
+
+        if (!url) {
+            resultExtras?.previewButton.classList.add("hidden");
+            return;
+        }
+
+        await playAudioFrom(url, 0);
+    } catch (error) {
+        if (token === audioToken) {
+            console.warn("No se pudo reproducir la preview:", error);
+        }
+    }
 }
 
 function startFragmentTimer(seconds) {
     clearFragmentTimer();
 
-    fragmentTimer = setTimeout(async () => {
-        if (spotifyPlayer && isPlaying) {
-            try {
-                await spotifyPlayer.pause();
-            } catch (error) {
-                console.error("Error pausando:", error);
-            }
-        }
-
-        isPlaying = false;
-        updatePlayButton();
+    fragmentTimer = setTimeout(() => {
+        audio.pause();
     }, seconds * 1000);
 }
 
@@ -612,18 +589,20 @@ function updatePlayButton() {
         playIcon.textContent = "▶";
         playButton.setAttribute("aria-label", "Reproducir");
     }
+
+    if (resultExtras) {
+        resultExtras.previewButton.textContent = isPlaying
+            ? "❚❚ Pausar preview"
+            : "▶ Escuchar preview (30 s)";
+    }
 }
 
 async function stopPlayback() {
+    audioToken++;
+
     clearFragmentTimer();
 
-    if (spotifyPlayer) {
-        try {
-            await spotifyPlayer.pause();
-        } catch (error) {
-            console.error("Error pausando:", error);
-        }
-    }
+    audio.pause();
 
     isPlaying = false;
     updatePlayButton();
@@ -733,6 +712,7 @@ function buildCurrentSong(song) {
         artists: [{ name: song.artist }],
         albumImage: song.albumImage || "",
         durationMs: song.durationMs || 0,
+        previewUrl: song.previewUrl || null,
         difficulty: song.difficulty
     };
 }
@@ -751,6 +731,8 @@ async function prepareRound({ mode, song, startMs, round }) {
     currentSong = buildCurrentSong(song);
     currentDifficulty = song.difficulty;
     fragmentStartMs = startMs;
+
+    preloadPreview();
 
     guessInput.disabled = false;
     guessButton.disabled = false;
@@ -868,6 +850,81 @@ async function showRoundResult(won) {
     mode?.updateNextButton?.();
 
     resultModal.classList.remove("hidden");
+
+    // Al mostrar el resultado suena la preview completa.
+    setResultExtras(currentSong);
+    playResultPreview();
+}
+
+
+// =====================================================
+// EXTRAS DEL MODAL DE RESULTADO (preview + enlaces)
+// Se crean desde JS: no hace falta tocar el HTML.
+// =====================================================
+
+function createResultLink(label) {
+    const link = document.createElement("a");
+
+    link.className = "result-link";
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = label;
+
+    return link;
+}
+
+function ensureResultExtras() {
+    if (resultExtras) return resultExtras;
+
+    const previewButton = document.createElement("button");
+
+    previewButton.type = "button";
+    previewButton.className = "result-preview-button";
+
+    previewButton.addEventListener("click", async () => {
+        if (isPlaying) {
+            await stopPlayback();
+        } else {
+            await playResultPreview();
+        }
+    });
+
+    const spotifyLink = createResultLink("Spotify ↗");
+    const youtubeLink = createResultLink("YouTube ↗");
+
+    const links = document.createElement("div");
+
+    links.className = "result-links";
+    links.append(spotifyLink, youtubeLink);
+
+    // Preview debajo del artista; enlaces debajo del botón "siguiente".
+    resultSongArtist.insertAdjacentElement("afterend", previewButton);
+    nextRoundButton.insertAdjacentElement("afterend", links);
+
+    resultExtras = { previewButton, links, spotifyLink, youtubeLink };
+
+    updatePlayButton();
+
+    return resultExtras;
+}
+
+// song = null oculta la preview y los enlaces (p. ej. en el resumen del diario).
+function setResultExtras(song) {
+    const extras = ensureResultExtras();
+
+    extras.previewButton.classList.toggle("hidden", !song);
+    extras.links.classList.toggle("hidden", !song);
+
+    if (!song) return;
+
+    extras.spotifyLink.href =
+        `https://open.spotify.com/track/${encodeURIComponent(song.id)}`;
+
+    // Enlace a la búsqueda de YouTube (un enlace directo necesitaría
+    // guardar el id del vídeo de cada canción).
+    extras.youtubeLink.href =
+        "https://www.youtube.com/results?search_query=" +
+        encodeURIComponent(`${song.name} ${artistsToText(song.artists)}`);
 }
 
 
@@ -1336,6 +1393,7 @@ export {
     generateRandomFragmentStart,
     prepareRound,
     goHome,
+    setResultExtras,
     currentAttempt,
     currentDifficulty,
     selectedDifficulty,
@@ -1358,15 +1416,6 @@ async function init() {
     await handleSpotifyCallback();
     await showSpotifyUser();
     await loadSongs();
-
-    if (getAccessToken()) {
-        try {
-            await waitForSpotifySDK();
-            await initializeSpotifyPlayer();
-        } catch (error) {
-            console.error("Error inicializando Spotify:", error);
-        }
-    }
 }
 
 // Se ejecuta cuando ya se han cargado daily.js e infinite.js.
