@@ -1,3 +1,16 @@
+// =====================================================
+// app.js — Núcleo de Songless
+//   · Configuración, estado y elementos DOM
+//   · Login con Spotify (OAuth PKCE) y SDK de reproducción
+//   · Pantalla principal y selección de modos
+//   · Motor de juego compartido (intentos, búsqueda, acierto)
+//   · Panel de administración
+//
+// Son módulos ES (los que Vite espera). En index.html solo hace falta
+// UN script, que apunta a app.js (este importa daily.js e infinite.js):
+//   <script type="module" src="./app.js"></script>
+// =====================================================
+
 
 // =====================================================
 // CONFIGURACIÓN
@@ -23,6 +36,14 @@ const DIFFICULTY_ORDER = ["easy", "medium", "hard", "impossible"];
 
 // =====================================================
 // MODOS DE JUEGO
+// Cada modo (daily.js, infinite.js) exporta un objeto con:
+//   start()               → arranca el modo desde la pantalla principal
+//   onRoundEnd(won)       → se llama al terminar una ronda
+//   updateNextButton()    → texto del botón "siguiente" del modal
+//   onNext()              → acción del botón "siguiente"
+//   onPickDifficulty(key) → (opcional) elegir dificultad en el modal
+// Para añadir un modo nuevo: crea su archivo, impórtalo aquí y
+// añádelo a gameModes.
 // =====================================================
 
 import { dailyMode } from "./daily.js";
@@ -380,16 +401,20 @@ function getRandomSong(difficultyKey) {
     return available[Math.floor(Math.random() * available.length)];
 }
 
-// Selector de la pantalla principal (afecta al modo infinito).
-function setDifficulty(difficultyKey) {
-    selectedDifficulty = difficultyKey;
-
+// Solo marca visualmente un nivel en el selector (no cambia la elección).
+function highlightDifficulty(difficultyKey) {
     difficultyOptions.forEach((button) => {
         button.classList.toggle(
             "selected",
             button.dataset.difficulty === difficultyKey
         );
     });
+}
+
+// Elección del usuario en el selector (la usa el modo infinito).
+function setDifficulty(difficultyKey) {
+    selectedDifficulty = difficultyKey;
+    highlightDifficulty(difficultyKey);
 }
 
 function generateRandomFragmentStart(durationMs, rand = Math.random) {
@@ -737,6 +762,10 @@ async function prepareRound({ mode, song, startMs, round }) {
     difficulty.textContent = getDifficultyLabel(currentDifficulty);
     roundNumber.textContent = String(round).padStart(2, "0");
 
+    // El selector sigue a la ronda (también en el diario), sin tocar
+    // la dificultad que el usuario eligió para el infinito.
+    highlightDifficulty(currentDifficulty);
+
     // Elegir dificultad en el modal solo tiene sentido en infinito.
     resultDifficultyButtons.forEach((button) => {
         button.classList.toggle("hidden", mode === "daily");
@@ -862,6 +891,9 @@ async function goHome() {
 
     currentSong = null;
     selectedTrack = null;
+
+    // Al volver, el selector muestra otra vez la elección del usuario.
+    highlightDifficulty(selectedDifficulty);
 
     resultModal.classList.add("hidden");
     gameScreen.classList.add("hidden");
