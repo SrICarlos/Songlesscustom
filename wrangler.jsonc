@@ -1,8 +1,19 @@
 {
   "name": "songless",
+  "main": "./worker.js",
   "compatibility_date": "2026-11-25",
   "assets": {
     "directory": "./src/dist/",
-    "not_found_handling": "single-page-application"
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "kv_namespaces": [
+    {
+      "binding": "SONGS",
+      "id": "4c4db86a33464dab8b9cbb784547ceb0"
+    }
+  ],
+  "vars": {
+    "ADMIN_SPOTIFY_ID": "6mvwt60v6a8qohcwx4zy1eh03"
   }
 }
