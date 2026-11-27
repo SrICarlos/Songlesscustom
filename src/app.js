@@ -1,3 +1,16 @@
+// =====================================================
+// app.js — Núcleo de Songless
+//   · Configuración, estado y elementos DOM
+//   · Login con Spotify (OAuth PKCE) y reproducción de previews (<audio>)
+//   · Pantalla principal y selección de modos
+//   · Motor de juego compartido (intentos, búsqueda, acierto)
+//   · Panel de administración
+//
+// Son módulos ES (los que Vite espera). En index.html solo hace falta
+// UN script, que apunta a app.js (este importa daily.js e infinite.js):
+//   <script type="module" src="./app.js"></script>
+// =====================================================
+
 
 // =====================================================
 // CONFIGURACIÓN
@@ -24,7 +37,17 @@ const DIFFICULTY_ORDER = ["easy", "medium", "hard", "impossible"];
 const PREVIEW_LENGTH_MS = 30000;
 
 
-
+// =====================================================
+// MODOS DE JUEGO
+// Cada modo (daily.js, infinite.js) exporta un objeto con:
+//   start()               → arranca el modo desde la pantalla principal
+//   onRoundEnd(won)       → se llama al terminar una ronda
+//   updateNextButton()    → texto del botón "siguiente" del modal
+//   onNext()              → acción del botón "siguiente"
+//   onPickDifficulty(key) → (opcional) elegir dificultad en el modal
+// Para añadir un modo nuevo: crea su archivo, impórtalo aquí y
+// añádelo a gameModes.
+// =====================================================
 
 import { dailyMode } from "./daily.js";
 import { infiniteMode } from "./infinite.js";
@@ -62,7 +85,6 @@ let selectedDifficulty = "easy";
 
 let isPlaying = false;
 let fragmentTimer = null;
-let searchTimeout = null;
 let lastRoundResult = null;
 
 const attemptStates = [null, null, null, null, null];
@@ -188,6 +210,9 @@ function artistsToText(artists) {
 
 function areSongsEqual(a, b) {
     if (!a || !b) return false;
+
+    // Mismo id de Spotify: es la misma canción sin más comprobaciones.
+    if (a.id && b.id && a.id === b.id) return true;
 
     return (
         normalizeSongText(a.name) === normalizeSongText(b.name) &&
@@ -768,8 +793,13 @@ setVolume(loadVolumePosition(), false);
 
 
 // =====================================================
-// BÚSQUEDA SPOTIFY (cuadro de respuesta)
+// BUSCADOR DE CANCIONES (cuadro de respuesta)
+// Busca en el catálogo de Songless: las mismas canciones que ya se
+// cargan de /api/songs. No necesita sesión de Spotify ni llamadas
+// externas, así que funciona para cualquiera y al instante.
 // =====================================================
+
+const MAX_SEARCH_RESULTS = 5;
 
 function showSearchMessage(text) {
     searchResults.classList.remove("hidden");
@@ -777,54 +807,69 @@ function showSearchMessage(text) {
         `<div class="search-message">${escapeHtml(text)}</div>`;
 }
 
-async function searchSpotifyTracks(query) {
-    const trimmedQuery = query.trim();
+// Canción del catálogo → formato que usa el juego para comparar y pintar.
+function catalogSongToTrack(song) {
+    return {
+        id: song.spotifyId,
+        name: song.title,
+        artists: [{ name: song.artist }],
+        albumImage: song.albumImage || ""
+    };
+}
 
-    if (trimmedQuery.length < 2) {
+function searchSongs(query) {
+    const words = normalizeSongText(query).split(" ").filter(Boolean);
+    const phrase = words.join(" ");
+
+    // Menos de 2 letras (o solo símbolos): no se busca.
+    if (phrase.length < 2) {
         searchResults.classList.add("hidden");
         return;
     }
 
-    // Sin sesión el buscador no puede funcionar: que se vea el motivo.
-    if (!getAccessToken() && !localStorage.getItem("spotify_refresh_token")) {
-        showSearchMessage("Conecta Spotify (arriba a la derecha) para buscar canciones.");
+    if (!songs.length) {
+        showSearchMessage("Todavía no hay canciones cargadas.");
         return;
     }
 
-    showSearchMessage("Buscando...");
+    const matches = [];
+    const seen = new Set();
 
-    try {
-        const url = new URL("https://api.spotify.com/v1/search");
-        url.searchParams.set("q", trimmedQuery);
-        url.searchParams.set("type", "track");
-        url.searchParams.set("limit", "5");
+    for (const song of songs) {
+        const title = normalizeSongText(song.title);
+        const artist = normalizeSongText(song.artist);
 
-        const response = await spotifyFetch(url);
+        // Una misma canción repetida (álbum y single) sale una sola vez.
+        const key = `${title}|${artist}`;
 
-        if (!response.ok) {
-            throw new Error(await response.text());
-        }
+        if (seen.has(key)) continue;
 
-        const data = await response.json();
+        // Cada palabra escrita debe aparecer en el título o en el artista,
+        // sin importar mayúsculas ni tildes ("beyonce" encuentra "Beyoncé").
+        const text = `${title} ${artist}`;
 
-        // Si el usuario siguió escribiendo, esta respuesta ya no vale.
-        if (guessInput.value.trim() !== trimmedQuery) return;
+        if (!words.every((word) => text.includes(word))) continue;
 
-        renderSearchResults(data.tracks?.items || []);
-    } catch (error) {
-        console.error("Error buscando canciones:", error);
+        seen.add(key);
 
-        if (error.message === "NO_SESSION") {
-            logoutSpotify();
-            showSearchMessage("Tu sesión de Spotify ha caducado. Vuelve a conectarla.");
-            return;
-        }
+        // Primero las que empiezan igual, luego título, luego artista.
+        const rank = title.startsWith(phrase) ? 0
+            : title.includes(phrase) ? 1
+            : artist.includes(phrase) ? 2
+            : 3;
 
-        showSearchMessage("Error realizando la búsqueda.");
+        matches.push({ song, rank, title });
     }
+
+    matches.sort((a, b) => a.rank - b.rank || a.title.localeCompare(b.title));
+
+    renderSearchResults(
+        matches.slice(0, MAX_SEARCH_RESULTS).map((m) => catalogSongToTrack(m.song))
+    );
 }
 
 function renderSearchResults(tracks) {
+    searchResults.classList.remove("hidden");
     searchResults.innerHTML = "";
 
     if (!tracks.length) {
@@ -837,17 +882,12 @@ function renderSearchResults(tracks) {
         const button = document.createElement("button");
         button.className = "search-result";
 
-        const image =
-            track.album?.images?.[2]?.url ||
-            track.album?.images?.[0]?.url ||
-            "";
-
         const artists = artistsToText(track.artists);
 
         button.innerHTML = `
             ${
-                image
-                    ? `<img class="search-result-image" src="${escapeHtml(image)}" alt="">`
+                track.albumImage
+                    ? `<img class="search-result-image" src="${escapeHtml(track.albumImage)}" alt="">`
                     : `<div class="search-result-image"></div>`
             }
             <div class="search-result-info">
@@ -1153,11 +1193,7 @@ skipButton.addEventListener("click", skip);
 guessInput.addEventListener("input", () => {
     selectedTrack = null;
 
-    clearTimeout(searchTimeout);
-
-    const query = guessInput.value;
-
-    searchTimeout = setTimeout(() => searchSpotifyTracks(query), 300);
+    searchSongs(guessInput.value);
 });
 
 guessInput.addEventListener("keydown", (event) => {
