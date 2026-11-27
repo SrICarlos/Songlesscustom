@@ -1,5 +1,4 @@
 
-
 // =====================================================
 // CONFIGURACIÓN
 // =====================================================
@@ -25,17 +24,7 @@ const DIFFICULTY_ORDER = ["easy", "medium", "hard", "impossible"];
 const PREVIEW_LENGTH_MS = 30000;
 
 
-// =====================================================
-// MODOS DE JUEGO
-// Cada modo (daily.js, infinite.js) exporta un objeto con:
-//   start()               → arranca el modo desde la pantalla principal
-//   onRoundEnd(won)       → se llama al terminar una ronda
-//   updateNextButton()    → texto del botón "siguiente" del modal
-//   onNext()              → acción del botón "siguiente"
-//   onPickDifficulty(key) → (opcional) elegir dificultad en el modal
-// Para añadir un modo nuevo: crea su archivo, impórtalo aquí y
-// añádelo a gameModes.
-// =====================================================
+
 
 import { dailyMode } from "./daily.js";
 import { infiniteMode } from "./infinite.js";
@@ -56,8 +45,8 @@ const audio = new Audio();
 audio.preload = "auto";
 let audioToken = 0;   // invalida reproducciones que quedaron pendientes
 
-// Preview y enlaces del modal de resultado (se crean al primer uso).
-let resultExtras = null;
+// true tras reproducir la preview del resultado (permite reanudarla).
+let resultPreviewStarted = false;
 
 let songs = [];
 
@@ -144,6 +133,22 @@ const resultSongArtist = $("resultSongArtist");
 const nextRoundButton = $("nextRoundButton");
 const closeResultButton = $("closeResultButton");
 const resultDifficultyButtons = document.querySelectorAll(".result-difficulty");
+
+// Preview y enlaces del modal de resultado (el HTML está en index.html)
+const resultPlayer = $("resultPlayer");
+const previewPlayButton = $("previewPlayButton");
+const previewPlayIcon = $("previewPlayIcon");
+const previewBar = $("previewBar");
+const previewBarFill = $("previewBarFill");
+const previewCurrentTime = $("previewCurrentTime");
+const previewTotalTime = $("previewTotalTime");
+const resultLinks = $("resultLinks");
+const spotifyLink = $("spotifyLink");
+const youtubeLink = $("youtubeLink");
+
+// Volumen: hay un control en la pantalla de juego y otro en el resultado
+const volumeSliders = document.querySelectorAll(".volume-slider");
+const volumeButtons = document.querySelectorAll(".volume-mute");
 
 
 // =====================================================
@@ -311,10 +316,82 @@ async function handleSpotifyCallback() {
 // PERFIL SPOTIFY
 // =====================================================
 
-async function getSpotifyProfile(accessToken) {
-    const response = await fetch("https://api.spotify.com/v1/me", {
-        headers: { Authorization: `Bearer ${accessToken}` }
-    });
+// Los tokens de Spotify caducan a la hora. Con el refresh_token que se
+// guarda al iniciar sesión se pide uno nuevo sin que el usuario haga nada.
+let refreshPromise = null;
+
+async function refreshAccessToken() {
+    // Varias peticiones a la vez comparten una sola renovación.
+    if (refreshPromise) return refreshPromise;
+
+    const refreshToken = localStorage.getItem("spotify_refresh_token");
+
+    if (!refreshToken) return null;
+
+    refreshPromise = (async () => {
+        try {
+            const response = await fetch("https://accounts.spotify.com/api/token", {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: new URLSearchParams({
+                    client_id: CLIENT_ID,
+                    grant_type: "refresh_token",
+                    refresh_token: refreshToken
+                })
+            });
+
+            if (!response.ok) return null;
+
+            const data = await response.json();
+
+            localStorage.setItem("spotify_access_token", data.access_token);
+
+            // Spotify a veces devuelve también un refresh_token nuevo.
+            if (data.refresh_token) {
+                localStorage.setItem("spotify_refresh_token", data.refresh_token);
+            }
+
+            return data.access_token;
+        } catch (error) {
+            console.error("No se pudo renovar la sesión de Spotify:", error);
+            return null;
+        } finally {
+            refreshPromise = null;
+        }
+    })();
+
+    return refreshPromise;
+}
+
+// fetch a la API de Spotify con el token puesto. Si responde 401 (token
+// caducado) renueva la sesión y repite la petición una vez. Si no se puede
+// renovar lanza Error("NO_SESSION").
+async function spotifyFetch(url, options = {}) {
+    const send = (token) =>
+        fetch(url, {
+            ...options,
+            headers: { ...(options.headers || {}), Authorization: `Bearer ${token}` }
+        });
+
+    let token = getAccessToken() || (await refreshAccessToken());
+
+    if (!token) throw new Error("NO_SESSION");
+
+    let response = await send(token);
+
+    if (response.status === 401) {
+        token = await refreshAccessToken();
+
+        if (!token) throw new Error("NO_SESSION");
+
+        response = await send(token);
+    }
+
+    return response;
+}
+
+async function getSpotifyProfile() {
+    const response = await spotifyFetch("https://api.spotify.com/v1/me");
 
     if (!response.ok) {
         throw new Error("No se pudo obtener el perfil de Spotify.");
@@ -324,7 +401,8 @@ async function getSpotifyProfile(accessToken) {
 }
 
 async function showSpotifyUser() {
-    const token = getAccessToken();
+    // Sin token pero con refresh_token: intenta recuperar la sesión.
+    const token = getAccessToken() || (await refreshAccessToken());
 
     if (!token) {
         spotifyLoginButton.classList.remove("hidden");
@@ -333,7 +411,7 @@ async function showSpotifyUser() {
     }
 
     try {
-        const profile = await getSpotifyProfile(token);
+        const profile = await getSpotifyProfile();
 
         spotifyStatus.textContent = profile.display_name || profile.id;
 
@@ -516,6 +594,8 @@ async function playFragment() {
     const token = ++audioToken;
     const duration = ATTEMPT_DURATIONS[currentAttempt - 1];
 
+    resultPreviewStarted = false;
+
     clearFragmentTimer();
 
     try {
@@ -554,11 +634,13 @@ async function playResultPreview() {
         if (token !== audioToken) return;
 
         if (!url) {
-            resultExtras?.previewButton.classList.add("hidden");
+            resultPlayer.classList.add("hidden");
             return;
         }
 
         await playAudioFrom(url, 0);
+
+        if (token === audioToken) resultPreviewStarted = true;
     } catch (error) {
         if (token === audioToken) {
             console.warn("No se pudo reproducir la preview:", error);
@@ -590,11 +672,12 @@ function updatePlayButton() {
         playButton.setAttribute("aria-label", "Reproducir");
     }
 
-    if (resultExtras) {
-        resultExtras.previewButton.textContent = isPlaying
-            ? "❚❚ Pausar preview"
-            : "▶ Escuchar preview (30 s)";
-    }
+    previewPlayIcon.textContent = isPlaying ? "❚❚" : "▶";
+
+    previewPlayButton.setAttribute(
+        "aria-label",
+        isPlaying ? "Pausar preview" : "Escuchar preview"
+    );
 }
 
 async function stopPlayback() {
@@ -610,14 +693,91 @@ async function stopPlayback() {
 
 
 // =====================================================
+// VOLUMEN
+// El control es una posición de 0 a 1 y el volumen real es su cuadrado:
+// así hay más precisión en la zona baja, que es donde se nota el oído.
+// Se guarda en el navegador y vale para el juego y para el resultado.
+// =====================================================
+
+const VOLUME_KEY = "songless_volume";
+const DEFAULT_VOLUME_POSITION = 0.5;
+
+let lastVolumePosition = DEFAULT_VOLUME_POSITION;
+
+function loadVolumePosition() {
+    try {
+        const saved = parseFloat(localStorage.getItem(VOLUME_KEY));
+
+        if (Number.isFinite(saved)) {
+            return Math.min(Math.max(saved, 0), 1);
+        }
+    } catch (error) {
+        // Sin almacenamiento: se usa el valor por defecto.
+    }
+
+    return DEFAULT_VOLUME_POSITION;
+}
+
+function setVolume(position, save = true) {
+    const value = Math.min(Math.max(position, 0), 1);
+
+    audio.volume = value * value;
+
+    if (value > 0) lastVolumePosition = value;
+
+    const percent = Math.round(value * 100);
+    const level = value === 0 ? 0 : value < 0.5 ? 1 : 2;
+
+    volumeSliders.forEach((slider) => {
+        slider.value = String(percent);
+        slider.style.setProperty("--value", `${percent}%`);
+    });
+
+    volumeButtons.forEach((button) => {
+        button.dataset.level = String(level);
+        button.setAttribute(
+            "aria-label",
+            value === 0 ? "Activar sonido" : "Silenciar"
+        );
+    });
+
+    if (!save) return;
+
+    try {
+        localStorage.setItem(VOLUME_KEY, String(value));
+    } catch (error) {
+        // No pasa nada si no se puede guardar.
+    }
+}
+
+volumeSliders.forEach((slider) => {
+    slider.addEventListener("input", () => {
+        setVolume(Number(slider.value) / 100);
+    });
+});
+
+volumeButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+        const muted = audio.volume === 0;
+
+        setVolume(muted ? lastVolumePosition : 0);
+    });
+});
+
+setVolume(loadVolumePosition(), false);
+
+
+// =====================================================
 // BÚSQUEDA SPOTIFY (cuadro de respuesta)
 // =====================================================
 
+function showSearchMessage(text) {
+    searchResults.classList.remove("hidden");
+    searchResults.innerHTML =
+        `<div class="search-message">${escapeHtml(text)}</div>`;
+}
+
 async function searchSpotifyTracks(query) {
-    const token = getAccessToken();
-
-    if (!token) return;
-
     const trimmedQuery = query.trim();
 
     if (trimmedQuery.length < 2) {
@@ -625,8 +785,13 @@ async function searchSpotifyTracks(query) {
         return;
     }
 
-    searchResults.classList.remove("hidden");
-    searchResults.innerHTML = `<div class="search-message">Buscando...</div>`;
+    // Sin sesión el buscador no puede funcionar: que se vea el motivo.
+    if (!getAccessToken() && !localStorage.getItem("spotify_refresh_token")) {
+        showSearchMessage("Conecta Spotify (arriba a la derecha) para buscar canciones.");
+        return;
+    }
+
+    showSearchMessage("Buscando...");
 
     try {
         const url = new URL("https://api.spotify.com/v1/search");
@@ -634,9 +799,7 @@ async function searchSpotifyTracks(query) {
         url.searchParams.set("type", "track");
         url.searchParams.set("limit", "5");
 
-        const response = await fetch(url, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
+        const response = await spotifyFetch(url);
 
         if (!response.ok) {
             throw new Error(await response.text());
@@ -644,12 +807,20 @@ async function searchSpotifyTracks(query) {
 
         const data = await response.json();
 
+        // Si el usuario siguió escribiendo, esta respuesta ya no vale.
+        if (guessInput.value.trim() !== trimmedQuery) return;
+
         renderSearchResults(data.tracks?.items || []);
     } catch (error) {
         console.error("Error buscando canciones:", error);
 
-        searchResults.innerHTML =
-            `<div class="search-message">Error realizando la búsqueda.</div>`;
+        if (error.message === "NO_SESSION") {
+            logoutSpotify();
+            showSearchMessage("Tu sesión de Spotify ha caducado. Vuelve a conectarla.");
+            return;
+        }
+
+        showSearchMessage("Error realizando la búsqueda.");
     }
 }
 
@@ -858,71 +1029,75 @@ async function showRoundResult(won) {
 
 
 // =====================================================
-// EXTRAS DEL MODAL DE RESULTADO (preview + enlaces)
-// Se crean desde JS: no hace falta tocar el HTML.
+// MODAL DE RESULTADO: preview, progreso y enlaces
+// El HTML está en index.html (#resultPlayer y #resultLinks).
 // =====================================================
 
-function createResultLink(label) {
-    const link = document.createElement("a");
+function formatTime(seconds) {
+    const total = Math.max(0, Math.floor(seconds || 0));
 
-    link.className = "result-link";
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
-    link.textContent = label;
-
-    return link;
+    return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
 }
 
-function ensureResultExtras() {
-    if (resultExtras) return resultExtras;
-
-    const previewButton = document.createElement("button");
-
-    previewButton.type = "button";
-    previewButton.className = "result-preview-button";
-
-    previewButton.addEventListener("click", async () => {
-        if (isPlaying) {
-            await stopPlayback();
-        } else {
-            await playResultPreview();
-        }
-    });
-
-    const spotifyLink = createResultLink("Spotify ↗");
-    const youtubeLink = createResultLink("YouTube ↗");
-
-    const links = document.createElement("div");
-
-    links.className = "result-links";
-    links.append(spotifyLink, youtubeLink);
-
-    // Preview debajo del artista; enlaces debajo del botón "siguiente".
-    resultSongArtist.insertAdjacentElement("afterend", previewButton);
-    nextRoundButton.insertAdjacentElement("afterend", links);
-
-    resultExtras = { previewButton, links, spotifyLink, youtubeLink };
-
-    updatePlayButton();
-
-    return resultExtras;
+function resetPreviewProgress() {
+    previewBarFill.style.width = "0%";
+    previewCurrentTime.textContent = "0:00";
+    previewTotalTime.textContent = formatTime(PREVIEW_LENGTH_MS / 1000);
 }
 
-// song = null oculta la preview y los enlaces (p. ej. en el resumen del diario).
+function updatePreviewProgress() {
+    const duration = audio.duration || PREVIEW_LENGTH_MS / 1000;
+    const percent = Math.min(100, (audio.currentTime / duration) * 100);
+
+    previewBarFill.style.width = `${percent}%`;
+    previewCurrentTime.textContent = formatTime(audio.currentTime);
+    previewTotalTime.textContent = formatTime(duration);
+}
+
+audio.addEventListener("timeupdate", updatePreviewProgress);
+
+previewPlayButton.addEventListener("click", async () => {
+    if (isPlaying) {
+        await stopPlayback();
+        return;
+    }
+
+    // Pausada a medias: continúa donde estaba.
+    if (resultPreviewStarted && audio.currentTime > 0 && !audio.ended) {
+        audio.play().catch(() => {});
+        return;
+    }
+
+    await playResultPreview();
+});
+
+// Clic en la barra para saltar a otro punto de la preview.
+previewBar.addEventListener("click", (event) => {
+    if (!Number.isFinite(audio.duration) || !resultPreviewStarted) return;
+
+    const rect = previewBar.getBoundingClientRect();
+    const ratio = Math.min(Math.max((event.clientX - rect.left) / rect.width, 0), 1);
+
+    audio.currentTime = ratio * audio.duration;
+});
+
+// song = null oculta preview y enlaces (p. ej. en el resumen del diario).
 function setResultExtras(song) {
-    const extras = ensureResultExtras();
+    resultPlayer.classList.toggle("hidden", !song);
+    resultLinks.classList.toggle("hidden", !song);
 
-    extras.previewButton.classList.toggle("hidden", !song);
-    extras.links.classList.toggle("hidden", !song);
+    resultPreviewStarted = false;
 
     if (!song) return;
 
-    extras.spotifyLink.href =
+    resetPreviewProgress();
+
+    spotifyLink.href =
         `https://open.spotify.com/track/${encodeURIComponent(song.id)}`;
 
-    // Enlace a la búsqueda de YouTube (un enlace directo necesitaría
+    // Enlace a la búsqueda de YouTube (uno directo al vídeo exigiría
     // guardar el id del vídeo de cada canción).
-    extras.youtubeLink.href =
+    youtubeLink.href =
         "https://www.youtube.com/results?search_query=" +
         encodeURIComponent(`${song.name} ${artistsToText(song.artists)}`);
 }
