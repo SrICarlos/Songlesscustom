@@ -24,17 +24,7 @@ const DIFFICULTY_ORDER = ["easy", "medium", "hard", "impossible"];
 const PREVIEW_LENGTH_MS = 30000;
 
 
-// =====================================================
-// MODOS DE JUEGO
-// Cada modo (daily.js, infinite.js) exporta un objeto con:
-//   start()               → arranca el modo desde la pantalla principal
-//   onRoundEnd(won)       → se llama al terminar una ronda
-//   updateNextButton()    → texto del botón "siguiente" del modal
-//   onNext()              → acción del botón "siguiente"
-//   onPickDifficulty(key) → (opcional) elegir dificultad en el modal
-// Para añadir un modo nuevo: crea su archivo, impórtalo aquí y
-// añádelo a gameModes.
-// =====================================================
+
 
 import { dailyMode } from "./daily.js";
 import { infiniteMode } from "./infinite.js";
@@ -791,7 +781,7 @@ setVolume(loadVolumePosition(), false);
 // =====================================================
 
 const SEARCH_ENDPOINT = "/api/search";
-const MAX_SEARCH_RESULTS = 5;
+const MAX_SEARCH_RESULTS = 8;
 const SEARCH_DEBOUNCE_MS = 250;
 const REMOTE_PAUSE_MS = 30000;
 const REMOTE_CACHE_SIZE = 50;
@@ -800,6 +790,7 @@ let searchTimeout = null;
 let searchController = null;
 let searchSeq = 0;                    // identifica la búsqueda vigente
 let remotePausedUntil = 0;
+let remoteFailure = "";               // motivo del último fallo del servidor
 const remoteCache = new Map();        // texto buscado → canciones
 
 
@@ -884,13 +875,38 @@ async function fetchRemoteTracks(text, signal) {
         { signal }
     );
 
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!response.ok) {
+        const failure = new Error(`HTTP ${response.status}`);
+
+        failure.status = response.status;
+
+        // El endpoint explica el motivo en el JSON: { "error": "..." }
+        try {
+            failure.code = (await response.json()).error;
+        } catch (parseError) {
+            // La respuesta de error no era JSON.
+        }
+
+        throw failure;
+    }
 
     // Si la ruta no existe, el servidor puede devolver una página HTML y
     // json() lanzará un error: se trata igual que cualquier otro fallo.
-    const data = await response.json();
+    let data;
 
-    if (!Array.isArray(data.tracks)) throw new Error("Respuesta inesperada");
+    try {
+        data = await response.json();
+    } catch (parseError) {
+        throw new Error("La respuesta no es JSON (¿existe /api/search?)");
+    }
+
+    if (!Array.isArray(data.tracks)) {
+        const failure = new Error("Respuesta inesperada");
+
+        failure.code = "respuesta_inesperada";
+
+        throw failure;
+    }
 
     const tracks = data.tracks.filter(
         (track) => track && track.id && track.name && Array.isArray(track.artists)
@@ -955,18 +971,26 @@ async function runRemoteSearch(text, phrase, seq) {
         console.warn("Búsqueda en el servidor no disponible; se usa el catálogo:", error);
 
         remotePausedUntil = Date.now() + REMOTE_PAUSE_MS;
+        remoteFailure = describeRemoteError(error);
 
         showCatalogResults(phrase);
     }
 }
 
-function showCatalogResults(phrase) {
-    if (!songs.length) {
-        showSearchMessage("No se pudo buscar ahora mismo. Inténtalo de nuevo en unos segundos.");
-        return;
-    }
+// Motivo corto del fallo para el aviso del desplegable.
+function describeRemoteError(error) {
+    if (error.code) return error.code;
+    if (error.status) return `HTTP ${error.status}`;
 
-    renderSearchResults(searchCatalog(phrase));
+    return "no se encuentra /api/search";
+}
+
+// Búsqueda de respaldo, avisando de que no es la búsqueda global.
+function showCatalogResults(phrase) {
+    renderSearchResults(
+        searchCatalog(phrase),
+        `Búsqueda global no disponible (${remoteFailure}). Solo se muestran canciones de la web.`
+    );
 }
 
 
@@ -1003,14 +1027,13 @@ function searchSongs(query) {
     );
 }
 
-function renderSearchResults(tracks) {
+function renderSearchResults(tracks, note = "") {
     searchResults.classList.remove("hidden");
     searchResults.innerHTML = "";
 
     if (!tracks.length) {
         searchResults.innerHTML =
             `<div class="search-message">No encontramos canciones.</div>`;
-        return;
     }
 
     tracks.forEach((track) => {
@@ -1035,6 +1058,17 @@ function renderSearchResults(tracks) {
 
         searchResults.appendChild(button);
     });
+
+    if (note) {
+        searchResults.insertAdjacentHTML(
+            "beforeend",
+            `<div class="search-note">${escapeHtml(note)}</div>`
+        );
+    }
+
+    // La lista se abre debajo del cuadro y puede quedar fuera de la pantalla:
+    // la página se desplaza solo lo justo para verla entera.
+    searchResults.scrollIntoView({ block: "nearest", behavior: "smooth" });
 }
 
 function selectTrack(track) {

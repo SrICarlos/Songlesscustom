@@ -3,7 +3,7 @@ const SEARCH_URL = "https://api.spotify.com/v1/search";
 
 const MIN_QUERY_LENGTH = 2;
 const MAX_QUERY_LENGTH = 100;
-const RESULT_LIMIT = 8;                 // Spotify admite hasta 10 en búsquedas
+const RESULT_LIMIT = 10;                // máximo que admite Spotify por búsqueda
 const CACHE_SECONDS = 3600;             // misma búsqueda = sin gastar cuota
 
 // El token de la app dura 1 hora. Se reutiliza mientras el servidor siga
@@ -128,7 +128,7 @@ export function cleanQuery(raw) {
 
 
 // -----------------------------------------------------
-// Adaptador: Cloudflare Worker
+// Adaptador: Cloudflare Worker (Este es solo si no pagas como yo)
 //
 //   en worker.js:
 //     import { handleSearchRequest } from "./search-endpoint.js";
