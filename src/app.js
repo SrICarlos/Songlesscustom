@@ -1,16 +1,3 @@
-// =====================================================
-// app.js — Núcleo de Songless
-//   · Configuración, estado y elementos DOM
-//   · Login con Spotify (OAuth PKCE) y reproducción de previews (<audio>)
-//   · Pantalla principal y selección de modos
-//   · Motor de juego compartido (intentos, búsqueda, acierto)
-//   · Panel de administración
-//
-// Son módulos ES (los que Vite espera). En index.html solo hace falta
-// UN script, que apunta a app.js (este importa daily.js e infinite.js):
-//   <script type="module" src="./app.js"></script>
-// =====================================================
-
 
 // =====================================================
 // CONFIGURACIÓN
@@ -794,17 +781,40 @@ setVolume(loadVolumePosition(), false);
 
 // =====================================================
 // BUSCADOR DE CANCIONES (cuadro de respuesta)
-// Busca en el catálogo de Songless: las mismas canciones que ya se
-// cargan de /api/songs. No necesita sesión de Spotify ni llamadas
-// externas, así que funciona para cualquiera y al instante.
+//
+// 1) Pide la búsqueda a /api/search: el servidor busca en Spotify con las
+//    credenciales de la app, así que el jugador NO necesita conectar su
+//    cuenta de Spotify.
+// 2) Si el servidor no responde (caído, sin configurar, límite de
+//    peticiones...), busca en el catálogo de Songless (/api/songs) para que
+//    el buscador no se quede mudo. Tras un fallo no insiste durante 30 s.
 // =====================================================
 
+const SEARCH_ENDPOINT = "/api/search";
 const MAX_SEARCH_RESULTS = 5;
+const SEARCH_DEBOUNCE_MS = 250;
+const REMOTE_PAUSE_MS = 30000;
+const REMOTE_CACHE_SIZE = 50;
+
+let searchTimeout = null;
+let searchController = null;
+let searchSeq = 0;                    // identifica la búsqueda vigente
+let remotePausedUntil = 0;
+const remoteCache = new Map();        // texto buscado → canciones
+
 
 function showSearchMessage(text) {
     searchResults.classList.remove("hidden");
     searchResults.innerHTML =
         `<div class="search-message">${escapeHtml(text)}</div>`;
+}
+
+// Anula cualquier búsqueda en marcha (al elegir una canción, cambiar de
+// ronda...) para que una respuesta tardía no vuelva a abrir la lista.
+function cancelSearch() {
+    searchSeq++;
+    clearTimeout(searchTimeout);
+    searchController?.abort();
 }
 
 // Canción del catálogo → formato que usa el juego para comparar y pintar.
@@ -817,30 +827,23 @@ function catalogSongToTrack(song) {
     };
 }
 
-function searchSongs(query) {
-    const words = normalizeSongText(query).split(" ").filter(Boolean);
-    const phrase = words.join(" ");
+// Detecta la misma canción repetida (álbum y single): título + 1.er artista.
+function trackKey(name, firstArtist) {
+    return `${normalizeSongText(name)}|${normalizeSongText(firstArtist)}`;
+}
 
-    // Menos de 2 letras (o solo símbolos): no se busca.
-    if (phrase.length < 2) {
-        searchResults.classList.add("hidden");
-        return;
-    }
 
-    if (!songs.length) {
-        showSearchMessage("Todavía no hay canciones cargadas.");
-        return;
-    }
+// ---------- Respaldo: catálogo de Songless ----------
 
+function searchCatalog(phrase) {
+    const words = phrase.split(" ");
     const matches = [];
     const seen = new Set();
 
     for (const song of songs) {
         const title = normalizeSongText(song.title);
         const artist = normalizeSongText(song.artist);
-
-        // Una misma canción repetida (álbum y single) sale una sola vez.
-        const key = `${title}|${artist}`;
+        const key = trackKey(song.title, String(song.artist).split(",")[0]);
 
         if (seen.has(key)) continue;
 
@@ -863,8 +866,140 @@ function searchSongs(query) {
 
     matches.sort((a, b) => a.rank - b.rank || a.title.localeCompare(b.title));
 
-    renderSearchResults(
-        matches.slice(0, MAX_SEARCH_RESULTS).map((m) => catalogSongToTrack(m.song))
+    return matches
+        .slice(0, MAX_SEARCH_RESULTS)
+        .map((match) => catalogSongToTrack(match.song));
+}
+
+
+// ---------- Búsqueda en el servidor ----------
+
+async function fetchRemoteTracks(text, signal) {
+    const cacheKey = text.toLowerCase();
+
+    if (remoteCache.has(cacheKey)) return remoteCache.get(cacheKey);
+
+    const response = await fetch(
+        `${SEARCH_ENDPOINT}?q=${encodeURIComponent(text)}`,
+        { signal }
+    );
+
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    // Si la ruta no existe, el servidor puede devolver una página HTML y
+    // json() lanzará un error: se trata igual que cualquier otro fallo.
+    const data = await response.json();
+
+    if (!Array.isArray(data.tracks)) throw new Error("Respuesta inesperada");
+
+    const tracks = data.tracks.filter(
+        (track) => track && track.id && track.name && Array.isArray(track.artists)
+    );
+
+    if (remoteCache.size >= REMOTE_CACHE_SIZE) {
+        remoteCache.delete(remoteCache.keys().next().value);
+    }
+
+    remoteCache.set(cacheKey, tracks);
+
+    return tracks;
+}
+
+// Quita repetidas y, si una canción también está en el catálogo, usa la
+// versión del catálogo (así se compara por id y no solo por el nombre).
+function useCatalogVersions(tracks) {
+    const byId = new Map();
+    const byKey = new Map();
+
+    for (const song of songs) {
+        byId.set(song.spotifyId, song);
+
+        const key = trackKey(song.title, String(song.artist).split(",")[0]);
+
+        if (!byKey.has(key)) byKey.set(key, song);
+    }
+
+    const seen = new Set();
+    const result = [];
+
+    for (const track of tracks) {
+        const key = trackKey(track.name, track.artists[0]?.name || "");
+
+        if (seen.has(key)) continue;
+
+        seen.add(key);
+
+        const song = byId.get(track.id) || byKey.get(key);
+
+        result.push(song ? catalogSongToTrack(song) : track);
+    }
+
+    return result;
+}
+
+async function runRemoteSearch(text, phrase, seq) {
+    searchController = new AbortController();
+
+    try {
+        const tracks = await fetchRemoteTracks(text, searchController.signal);
+
+        if (seq !== searchSeq) return;
+
+        renderSearchResults(
+            useCatalogVersions(tracks).slice(0, MAX_SEARCH_RESULTS)
+        );
+    } catch (error) {
+        // Una búsqueda más reciente ya tomó el relevo.
+        if (seq !== searchSeq || error.name === "AbortError") return;
+
+        console.warn("Búsqueda en el servidor no disponible; se usa el catálogo:", error);
+
+        remotePausedUntil = Date.now() + REMOTE_PAUSE_MS;
+
+        showCatalogResults(phrase);
+    }
+}
+
+function showCatalogResults(phrase) {
+    if (!songs.length) {
+        showSearchMessage("No se pudo buscar ahora mismo. Inténtalo de nuevo en unos segundos.");
+        return;
+    }
+
+    renderSearchResults(searchCatalog(phrase));
+}
+
+
+// ---------- Entrada del buscador ----------
+
+function searchSongs(query) {
+    const seq = ++searchSeq;
+
+    clearTimeout(searchTimeout);
+    searchController?.abort();
+
+    const text = query.replace(/\s+/g, " ").trim();
+    const phrase = normalizeSongText(text);
+
+    // Menos de 2 letras (o solo símbolos): no se busca.
+    if (phrase.length < 2) {
+        searchResults.classList.add("hidden");
+        return;
+    }
+
+    // El servidor falló hace poco: directamente el catálogo.
+    if (Date.now() < remotePausedUntil) {
+        showCatalogResults(phrase);
+        return;
+    }
+
+    const cached = remoteCache.has(text.toLowerCase());
+
+    if (!cached) showSearchMessage("Buscando...");
+
+    searchTimeout = setTimeout(
+        () => runRemoteSearch(text, phrase, seq),
+        cached ? 0 : SEARCH_DEBOUNCE_MS
     );
 }
 
@@ -903,6 +1038,8 @@ function renderSearchResults(tracks) {
 }
 
 function selectTrack(track) {
+    cancelSearch();
+
     selectedTrack = track;
 
     guessInput.value = `${track.name} — ${artistsToText(track.artists)}`;
@@ -950,6 +1087,9 @@ async function prepareRound({ mode, song, startMs, round }) {
     skipButton.disabled = false;
     guessInput.value = "";
     result.textContent = "";
+
+    cancelSearch();
+    searchResults.classList.add("hidden");
 
     gameMode.textContent = mode === "daily" ? "DIARIO" : "INFINITO";
     difficulty.textContent = getDifficultyLabel(currentDifficulty);
@@ -1028,6 +1168,9 @@ async function consumeAttempt(reason) {
     selectedTrack = null;
     guessInput.value = "";
     result.textContent = "";
+
+    cancelSearch();
+    searchResults.classList.add("hidden");
 
     updateAttempts();
 
